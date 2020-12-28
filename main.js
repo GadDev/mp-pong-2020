@@ -41,6 +41,9 @@
 		if (ballX < 0) {
 			if (ballY > paddle_oneY && ballY < paddle_oneY + PADDLE_HEIGHT) {
 				ballSpeedX = -ballSpeedX;
+				//increase speed if ball touch edge of the paddle
+				let deltaY = ballY - (paddle_oneY + PADDLE_HEIGHT / 2);
+				ballSpeedY = deltaY * 0.35;
 			} else {
 				ballReset();
 				playerTwoScore++;
@@ -50,6 +53,9 @@
 		if (ballX > CANVAS.width) {
 			if (ballY > paddle_twoY && ballY < paddle_twoY + PADDLE_HEIGHT) {
 				ballSpeedX = -ballSpeedX;
+
+				let deltaY = ballY - (paddle_twoY + PADDLE_HEIGHT / 2);
+				ballSpeedY = deltaY * 0.35;
 			} else {
 				ballReset();
 				playerOneScore++;
