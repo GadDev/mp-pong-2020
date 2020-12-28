@@ -2,6 +2,7 @@
 	const CANVAS = document.getElementById('game-canvas');
 	const CANVAS_CONTEXT = CANVAS.getContext('2d');
 	const FRAMES_PER_SECOND = 30;
+
 	let ballX = 50;
 	let ballY = 50;
 	let ballSpeedX = 10;
@@ -14,17 +15,17 @@
 
 	let playerOneScore = 0;
 	let playerTwoScore = 0;
+	const WINNING_SCORE = 1;
 
-	const init = () => {
-		setInterval(function () {
-			moveElements();
-			drawGame();
-		}, 1000 / FRAMES_PER_SECOND);
-		CANVAS.addEventListener('mousemove', (evt) => {
-			let mousePos = calculateMousePosition(evt);
-			paddle_oneY = mousePos.y - PADDLE_HEIGHT / 2;
-		});
+	let displayWinScreen = false;
+	const handleMouseClick = (event) => {
+		if (displayWinScreen) {
+			playerOneScore = 0;
+			playerTwoScore = 0;
+			displayWinScreen = false;
+		}
 	};
+
 	const computerMouvement = () => {
 		let paddle_two_center = paddle_twoY + PADDLE_HEIGHT / 2;
 		if (paddle_two_center < ballY - 35) {
@@ -34,6 +35,9 @@
 		}
 	};
 	const moveElements = () => {
+		if (displayWinScreen) {
+			return;
+		}
 		computerMouvement();
 		ballX = ballX + ballSpeedX;
 		ballY = ballY + ballSpeedY;
@@ -45,8 +49,8 @@
 				let deltaY = ballY - (paddle_oneY + PADDLE_HEIGHT / 2);
 				ballSpeedY = deltaY * 0.35;
 			} else {
+				playerTwoScore++; //before the reset ball position
 				ballReset();
-				playerTwoScore++;
 			}
 		}
 		// if close to left side
@@ -57,8 +61,8 @@
 				let deltaY = ballY - (paddle_twoY + PADDLE_HEIGHT / 2);
 				ballSpeedY = deltaY * 0.35;
 			} else {
-				ballReset();
 				playerOneScore++;
+				ballReset();
 			}
 		}
 		if (ballY < 0) {
@@ -68,10 +72,25 @@
 			ballSpeedY = -ballSpeedY;
 		}
 	};
-
+	const drawNet = () => {
+		for (let i = 0; i < CANVAS.height; i += 40) {
+			drawRect(CANVAS.width / 2 - 2, i, 4, 20, 'white');
+		}
+	};
 	const drawGame = () => {
 		// draws the board
 		drawRect(0, 0, CANVAS.width, CANVAS.height, '#bb5522');
+
+		if (displayWinScreen) {
+			CANVAS_CONTEXT.font = "25px 'Press Start 2P'";
+			CANVAS_CONTEXT.fillStyle = 'white';
+			playerOneScore > playerTwoScore
+				? CANVAS_CONTEXT.fillText('Player 1 wins', 250, 200)
+				: CANVAS_CONTEXT.fillText('CPU wins', 310, 200);
+			CANVAS_CONTEXT.fillText('Click to continue', 200, 400);
+			return;
+		}
+		drawNet();
 		// draws the left pad (left PLAYER)
 		drawRect(0, paddle_oneY, PADDLE_THICKNESS, PADDLE_HEIGHT, 'white');
 		// draws the right pad (AI PLAYER)
@@ -84,6 +103,8 @@
 		);
 		// draws the ball
 		drawCircle(ballX, ballY, 10, '#ccff00');
+		CANVAS_CONTEXT.font = "12px 'Press Start 2P'";
+		CANVAS_CONTEXT.fillStyle = 'white';
 		CANVAS_CONTEXT.fillText(playerOneScore, 100, 100);
 		CANVAS_CONTEXT.fillText(playerTwoScore, CANVAS.width - 100, 100);
 	};
@@ -111,9 +132,27 @@
 	};
 
 	const ballReset = () => {
+		if (
+			playerOneScore >= WINNING_SCORE ||
+			playerTwoScore >= WINNING_SCORE
+		) {
+			displayWinScreen = true;
+		}
 		ballSpeedX = -ballSpeedX;
 		ballX = CANVAS.width / 2;
 		ballY = CANVAS.height / 2;
+	};
+	const init = () => {
+		setInterval(function () {
+			moveElements();
+			drawGame();
+		}, 1000 / FRAMES_PER_SECOND);
+		CANVAS.addEventListener('mousemove', (evt) => {
+			let mousePos = calculateMousePosition(evt);
+			paddle_oneY = mousePos.y - PADDLE_HEIGHT / 2;
+		});
+
+		CANVAS.addEventListener('mousedown', handleMouseClick);
 	};
 	init();
 })();
