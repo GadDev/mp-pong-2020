@@ -1,0 +1,11 @@
+* {
+	box-sizing: border-box;
+	font-family: 'Roboto', sans-serif;
+}
+
+main {
+	display: flex;
+	flex-flow: column;
+	justify-content: center;
+	align-items: center;
+}
