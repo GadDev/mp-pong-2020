@@ -15,7 +15,7 @@
 
 	let playerOneScore = 0;
 	let playerTwoScore = 0;
-	const WINNING_SCORE = 1;
+	const WINNING_SCORE = 7;
 
 	let displayWinScreen = false;
 	const handleMouseClick = (event) => {
