@@ -31,10 +31,9 @@ jobs:
       - name: Create release pull request or tag/release
         uses: changesets/action@v2
         with:
-          version: npm run version
-          publish: npm run release
-          createGithubReleases: true
-          commit: "chore: version packages"
-          title: "chore: version packages"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          version-script: npm run version
+          publish-script: npm run release
+          create-github-releases: true
+          commit-message: "chore: version packages"
+          pr-title: "chore: version packages"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
