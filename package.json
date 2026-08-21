@@ -1,6 +1,6 @@
 {
   "name": "mp-pong-2020",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "A single-player Pong game in vanilla JS.",
   "main": "main.js",
