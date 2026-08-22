@@ -71,6 +71,7 @@ src/reveal/
   framerate.ts                 # per-act frame-time probe; inert unless DEV
   scene.ts                     # the real arena: court, net, two paddles, ball
   palette.ts                   # MOODBOARD.md hex tokens
+src/presence/                  # pre-game presence: its own scene + voice
 src/ui/                        # DOM-overlay chrome: intro, mainMenu, options,
                                #   pause, dossier, theme.css
 ```
@@ -134,7 +135,7 @@ Data flows one direction: input → game state → render. If `renderer.ts` star
 - **`three` is pinned exactly** (`0.185.1`, no caret), because Three.js breaks across minors and there's no regression suite. Don't loosen it.
 - **Green `#00FFA0` / red `#FF2D2D` are reserved exclusively for score feedback**, nowhere else, so they stay readable however much the HUD mutates. (Neither is in `palette.ts` yet — they arrive with real scoring.)
 - **Act 1's camera is dead still.** The stillness is what makes later movement land. Don't add juice to Act 1.
-- **Menus and HUD are DOM overlays, not in-canvas Three.js UI.** Also: the menu must never acknowledge a twist exists, before or after the player has seen it.
+- **Menus and HUD are DOM overlays, not in-canvas Three.js UI.** The one sanctioned exception is `src/presence/` — it's a rendered object *behind* the chrome, not chrome itself; all text, buttons and fragments are still DOM. Also: the menu must never acknowledge a twist exists, before or after the player has seen it.
 - **The reveal is discoverable once per device.** `hasSeenReveal` in `localStorage` permanently disarms escalation; there is deliberately no player-facing route back.
 - **Post-processing is budgeted:** bloom plus *one* stylistic pass. Chromatic aberration is Act-3-watcher-cut only — its value is being rare. (No `EffectComposer` yet; Milestone 5.)
 - **Audio is Howler.js when it's real.** Tone.js was rejected: the need is playback/mixing, not synthesis.
@@ -194,10 +195,13 @@ Real, small, worth fixing when touched — not blockers:
   numbers do not transfer on either axis. Re-measure;
   `reveal/framerate.ts` prints them per act in dev.
 - **Reduced motion is wired but only smoke-tested against the dummy scene.**
-  `src/motion.ts` is consumed by `camera.ts`, `hud.ts`, `postprocessing.ts`
-  and `ui/theme.css`. It has not been re-checked against real gameplay —
-  in particular whether holding the Act 3 orbit still leaves the ball
-  readable, which was not a question when nothing was playable.
+  `src/motion.ts` is the single source — consumed by `camera.ts`, `hud.ts`,
+  `postprocessing.ts`, `presence/presence.ts` and `ui/theme.css`. Don't call
+  `matchMedia` directly anywhere else; the flag is live precisely so a player
+  who toggles the OS setting mid-session is honoured. It has not been
+  re-checked against real gameplay — in particular whether holding the Act 3
+  orbit still leaves the ball readable, which was not a question when nothing
+  was playable.
 
 ## Legacy reference
 

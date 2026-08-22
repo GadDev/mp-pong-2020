@@ -12,7 +12,12 @@ export interface IntroScreenOptions {
  */
 export function createIntroScreen({ onSkip }: IntroScreenOptions): HTMLElement {
   const root = document.createElement("div");
-  root.className = "screen screen--void";
+  // Transparent so the pre-game presence (src/presence/) shows through, and
+  // `--void` on top of it to drop the grid image, per MOODBOARD.md's "nothing
+  // that telegraphs the arena." `--void` also stops the line-scroll animation,
+  // which is why this is two classes rather than an inline `backgroundImage`:
+  // an inline style can't be switched off by the reduced-motion media query.
+  root.className = "screen screen--transparent screen--void";
 
   const title = document.createElement("div");
   title.className = "screen__title screen__title--intro";

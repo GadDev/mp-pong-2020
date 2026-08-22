@@ -21,7 +21,7 @@ export function createOptionsScreen(
   { onVolumeChange, onSkipIntroChange, onBack }: OptionsScreenCallbacks,
 ): HTMLElement {
   const root = document.createElement("div");
-  root.className = "screen";
+  root.className = "screen screen--transparent";
 
   const title = document.createElement("div");
   title.className = "screen__title";

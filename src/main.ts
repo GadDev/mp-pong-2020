@@ -13,6 +13,8 @@ import { createMainMenu } from "./ui/mainMenu";
 import { createOptionsScreen } from "./ui/options";
 import { createPauseOverlay } from "./ui/pause";
 import { createDossierScreen } from "./ui/dossier";
+import { createPresence } from "./presence/presence";
+import { createPresenceVoice } from "./presence/voice";
 import { createResultScreen } from "./ui/result";
 import {
   getHasSeenReveal,
@@ -32,6 +34,11 @@ const app: HTMLDivElement = appElement;
 const gameLayer = document.createElement("div");
 app.appendChild(gameLayer);
 
+// The pre-game presence gets its own layer: it and the board are never on
+// screen together, so exactly one of these two is visible at any time.
+const presenceLayer = document.createElement("div");
+app.appendChild(presenceLayer);
+
 /**
  * BACKLOG.md requires a dev-only reveal re-trigger as Milestone 4 scope, not a
  * nice-to-have: `hasSeenReveal` permanently disarms the escalation, so without
@@ -43,6 +50,9 @@ const debugReveal =
   new URLSearchParams(window.location.search).get("debug") === "reveal";
 
 const renderer = new Renderer(gameLayer);
+const presence = createPresence(presenceLayer);
+const presenceVoice = createPresenceVoice();
+app.appendChild(presenceVoice.element);
 const audio = new RevealAudio();
 audio.setMasterVolume(getVolume());
 
@@ -77,6 +87,15 @@ function showScreen(screen: Screen): void {
   const gameVisible =
     screen === "playing" || screen === "paused" || screen === "result";
   gameLayer.style.display = gameVisible ? "block" : "none";
+  // The presence belongs to the pre-game chrome only. Once the board is up —
+  // and through the dossier, which is the reveal's own screen — OPERATOR is
+  // the only thing paying attention to the player.
+  const presenceVisible = !gameVisible && screen !== "dossier";
+  presenceLayer.style.display = presenceVisible ? "block" : "none";
+  presenceVoice.element.style.display = presenceVisible ? "flex" : "none";
+  // The intro is a bare title; the menu adds a list under it. The mark sits
+  // just above whichever, so it has to know which is on screen.
+  presence.setLayout(screen === "intro" ? "intro" : "menu");
 
   if (screen === "intro") {
     overlay = createIntroScreen({ onSkip: () => showScreen("menu") });
@@ -188,6 +207,9 @@ window.addEventListener("keydown", (event) => {
 window.addEventListener("click", () => audio.resume());
 
 showScreen(currentScreen);
+// Boot fragments run once, with the intro beat. Skipping the intro skips them
+// too — they're the cabinet waking up, not a greeting.
+if (currentScreen === "intro") presenceVoice.start();
 
 /** Clamped so a backgrounded tab doesn't resume with one enormous simulation step. */
 const MAX_FRAME_SECONDS = 0.1;
@@ -214,7 +236,14 @@ function animate(timestamp: number): void {
     currentScreen === "playing" ||
     currentScreen === "paused" ||
     currentScreen === "result";
-  if (!boardVisible) return;
+  if (!boardVisible) {
+    if (currentScreen !== "dossier") {
+      presenceVoice.update(dt);
+      presence.update(dt, presenceVoice.isSpeaking());
+      presence.render();
+    }
+    return;
+  }
 
   // Paused/result: freeze simulation, act clock, HUD and audio, but keep
   // painting the same frame — an idle WebGL canvas that stops issuing draw

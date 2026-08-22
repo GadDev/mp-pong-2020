@@ -162,11 +162,9 @@ disguise. That trade is genuinely open.
 mark fading in — no camera movement, no grid yet, nothing that telegraphs
 Act 1's arena. Skip prompt appears after a beat, not instantly."
 
-`src/ui/intro.ts` implements the fade and the delayed skip prompt. **It has
-no auto-advance** — a player who doesn't press anything waits forever. That
-one's not a design question, it's a bug against the spec's own "a few
-seconds," and it should be fixed regardless of anything else in this
-document.
+`src/ui/intro.ts` implements the fade and the delayed skip prompt.
+**Resolved:** it auto-advances to the menu after 4.5 s (`intro.ts:39`), so
+an idle player is no longer stuck on the logo.
 
 ### Where a longer intro can go without breaking anything
 
@@ -216,6 +214,19 @@ never be visible.
 ---
 
 ## 3. The pre-game presence — "a Tron-style AI face that talks to you"
+
+> **DECIDED — Tier 1, built.** `src/presence/` implements the faceless
+> version: a cyan wireframe icosahedron above the title that turns slowly
+> on its own, quickens and leans toward the pointer while you move, and
+> eases back to the slow drift when you stop. (It never fully stops — a
+> dead-still version reads as a static logo for anyone who doesn't move
+> the mouse, and never moves at all on touch, which has no passive pointer
+> movement to wake it.) Two boot fragments (`SYSTEM READY.` / `AWAITING INPUT.`),
+> then silence for the session. Rendered in-canvas through the shared
+> `WebGLRenderer` on its own bare scene — no grid, nothing that
+> telegraphs the arena. The no-face rule stands; the counter-proposal
+> below (the face belongs in the Act 3 dossier) is still the plan. The
+> rest of this section is kept as the reasoning trail.
 
 ### The conflict, stated plainly
 
@@ -302,12 +313,11 @@ lands instead of leaking.
 
 Ordered by cost, and none of them are Milestone 2 blockers:
 
-1. Fix `intro.ts`'s missing auto-advance. Spec bug, five lines.
+1. ~~Fix `intro.ts`'s missing auto-advance.~~ Done — `intro.ts:39`.
 2. Decide the title (or explicitly decide to keep `PONG`), then update the
    four call sites at once so they can't drift.
 3. Log attract mode and the calibration handshake in `BACKLOG.md` as Tier 1
    post-ship items — both are small, both are period-authentic, and both
    need the real court from M3 to exist first.
-4. Leave the presence question open until M5. It's a polish decision that
-   reads as an architecture decision, and nothing before M5 is blocked by
-   it.
+4. ~~Leave the presence question open until M5.~~ Decided early — Tier 1,
+   built in `src/presence/`. See the note at the top of §3.
