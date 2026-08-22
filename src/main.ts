@@ -9,6 +9,8 @@ import { createIntroScreen } from "./ui/intro";
 import { createMainMenu } from "./ui/mainMenu";
 import { createOptionsScreen } from "./ui/options";
 import { createPauseOverlay } from "./ui/pause";
+import { createPresence } from "./presence/presence";
+import { createPresenceVoice } from "./presence/voice";
 import { getSkipIntro, getVolume, setSkipIntro, setVolume } from "./persistence";
 
 const appElement = document.querySelector<HTMLDivElement>("#app");
@@ -16,6 +18,12 @@ if (!appElement) {
   throw new Error("#app root element not found");
 }
 const app: HTMLDivElement = appElement;
+
+// The canvas is shared by the reveal scene and the pre-game presence, so it
+// lives outside gameLayer — gameLayer (the HUD) still hides off-play, but
+// hiding the canvas would take the presence down with it.
+const canvasLayer = document.createElement("div");
+app.appendChild(canvasLayer);
 
 const gameLayer = document.createElement("div");
 app.appendChild(gameLayer);
@@ -31,7 +39,11 @@ const camera = new THREE.PerspectiveCamera(
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-gameLayer.appendChild(renderer.domElement);
+canvasLayer.appendChild(renderer.domElement);
+
+const presence = createPresence();
+const presenceVoice = createPresenceVoice();
+app.appendChild(presenceVoice.element);
 
 const hud = new RevealHud(gameLayer);
 const audio = new RevealAudio();
@@ -39,8 +51,10 @@ const timeline = new RevealTimeline();
 audio.setMasterVolume(getVolume());
 
 window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  const aspect = window.innerWidth / window.innerHeight;
+  camera.aspect = aspect;
   camera.updateProjectionMatrix();
+  presence.setViewport(window.innerWidth, window.innerHeight);
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
@@ -84,6 +98,12 @@ function showScreen(screen: Screen): void {
 
   const gameVisible = screen === "playing" || screen === "paused";
   gameLayer.style.display = gameVisible ? "block" : "none";
+  // The presence belongs to the pre-game chrome only. Once a match is on
+  // screen, OPERATOR is the only thing paying attention to the player.
+  presenceVoice.element.style.display = gameVisible ? "none" : "flex";
+  // The intro is a bare title; the menu adds a list under it. The mark sits
+  // just above whichever, so it has to know which is on screen.
+  presence.setLayout(screen === "intro" ? "intro" : "menu");
 
   if (screen === "intro") {
     overlay = createIntroScreen({ onSkip: () => showScreen("menu") });
@@ -175,11 +195,28 @@ window.addEventListener("keydown", (event) => {
 window.addEventListener("click", () => audio.resume());
 
 showScreen(currentScreen);
+// Boot fragments run once, with the intro beat. Skipping the intro skips
+// them too — they're the cabinet waking up, not a greeting.
+if (currentScreen === "intro") presenceVoice.start();
+
+let lastFrameTimestamp = performance.now() / 1000;
 
 function animate(): void {
   requestAnimationFrame(animate);
   const now = tickGameClock(currentScreen === "playing");
-  if (currentScreen !== "playing" && currentScreen !== "paused") return;
+
+  const raw = performance.now() / 1000;
+  // Clamped: a backgrounded tab returns one enormous delta, which would
+  // otherwise snap the presence through a whole rotation on the first frame.
+  const dt = Math.min(raw - lastFrameTimestamp, 0.1);
+  lastFrameTimestamp = raw;
+
+  if (currentScreen !== "playing" && currentScreen !== "paused") {
+    presenceVoice.update(dt);
+    presence.update(dt, presenceVoice.isSpeaking());
+    renderer.render(presence.scene, presence.camera);
+    return;
+  }
 
   // Paused: freeze game/HUD/audio state, but keep painting the same frame —
   // an idle WebGL canvas that stops issuing draw calls while still visible

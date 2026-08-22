@@ -1,0 +1,5 @@
+---
+"mp-pong-2020": minor
+---
+
+Add a pre-game presence to the intro and menu (`src/presence/`): a cyan wireframe icosahedron above the title that turns slowly on its own, quickens and leans toward the pointer while you move, and eases back to the slow drift when you stop, plus two boot fragments (`SYSTEM READY.` / `AWAITING INPUT.`) that brighten its edges as they appear and then go silent for the session. This is `EXPLORATION.md` §3's Tier 1 — deliberately faceless, so `LORE.md`'s no-face rule holds and the Act 3 dossier keeps the reveal. It renders in-canvas through the shared `WebGLRenderer` on its own bare scene (no grid, nothing that telegraphs the arena), which required moving the canvas out of the HUD layer so it survives the screen switch; all chrome remains DOM overlays. The mark is sized and positioned in pixel terms rather than world units, with separate offsets for the intro (bare title) and menu (title plus list), so it stays clear of the text at any viewport height, and `prefers-reduced-motion` disables all of its movement while keeping the speech brightening.

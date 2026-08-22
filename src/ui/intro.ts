@@ -11,7 +11,9 @@ export interface IntroScreenOptions {
  */
 export function createIntroScreen({ onSkip }: IntroScreenOptions): HTMLElement {
   const root = document.createElement("div");
-  root.className = "screen";
+  // Transparent so the pre-game presence (src/presence/) shows through; no
+  // grid lines here, per MOODBOARD.md's "nothing that telegraphs the arena."
+  root.className = "screen screen--transparent";
   root.style.backgroundImage = "none";
 
   const title = document.createElement("div");

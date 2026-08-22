@@ -47,6 +47,11 @@ Milestone 2 (intro / menu / pause shell) is in progress on top of it —
 src/main.ts           # wiring + debug keys + rAF loop
 src/persistence.ts    # localStorage prefs (volume, skip-intro); hasSeenReveal lands in M4
 src/ui/               # M2 DOM-overlay chrome: intro, mainMenu, options, pause, theme.css
+src/presence/         # pre-game presence (EXPLORATION.md §3 Tier 1): a faceless
+                      # wireframe that reacts to the pointer + two boot fragments.
+                      # Own bare Scene/Camera, rendered through the shared renderer
+                      # on intro/menu/options only. Deliberately NOT a face —
+                      # the face belongs to the Act 3 dossier.
 src/reveal/
   timeline.ts         # Act enum + scripted act clock (throwaway, see below)
   camera.ts           # per-act camera behaviour on one shared PerspectiveCamera
@@ -84,7 +89,7 @@ Data flows one direction: input → game state → render. If `renderer.ts` star
 - **`three` is pinned exactly** (`0.185.1`, no caret), because Three.js breaks across minors and there's no regression suite. Don't loosen it.
 - **Green `#00FFA0` / red `#FF2D2D` are reserved exclusively for score feedback**, nowhere else, so they stay readable however much the HUD mutates. (Neither is in `palette.ts` yet — they arrive with real scoring.)
 - **Act 1's camera is dead still.** The stillness is what makes later movement land. Don't add juice to Act 1.
-- **Menus and HUD are DOM overlays, not in-canvas Three.js UI.** Also: the menu must never acknowledge a twist exists, before or after the player has seen it.
+- **Menus and HUD are DOM overlays, not in-canvas Three.js UI.** The one sanctioned exception is `src/presence/` — it's a rendered object *behind* the chrome, not chrome itself; all text, buttons and fragments are still DOM. Also: the menu must never acknowledge a twist exists, before or after the player has seen it.
 - **The reveal is discoverable once per device.** `hasSeenReveal` in `localStorage` permanently disarms escalation; there is deliberately no player-facing route back.
 - **Post-processing is budgeted:** bloom plus *one* stylistic pass. Chromatic aberration is Act-3-watcher-cut only — its value is being rare. (No `EffectComposer` yet; Milestone 5.)
 - **Audio is Howler.js when it's real.** Tone.js was rejected: the need is playback/mixing, not synthesis.
@@ -116,11 +121,9 @@ Real, small, worth fixing when touched — not blockers:
   Continue does the same. This misses `ROADMAP.md` M2's "freezes the game
   loop" done-condition and needs an accumulated pause offset or a
   delta-driven timeline (same fix family as the delta-time item).
-- **`ui/intro.ts` never auto-advances.** `MOODBOARD.md` specifies "a few
-  seconds of void black"; a player who presses nothing waits forever.
 - **`scene.ts` adds an `AmbientLight` that does nothing.** Every material in the scene is `MeshBasicMaterial`, which is unlit by design. Either drop the light or move to a material that responds to it.
 - **The Act 2 HUD flicker and audio stutter are frame-rate dependent.** Both use a fixed ~50 ms window tested once per frame (`flickerWindow > 2.3 && < 2.35`, `stutterWindow > 3.0 && < 3.05`). Duration therefore varies with refresh rate, and `MOODBOARD.md` specifies a *single-frame* flicker. This is the same class of bug as the delta-time issue `BACKLOG.md` flags for Milestone 3 — fix both together with an explicit frame-or-duration-based trigger.
-- **No `prefers-reduced-motion` path.** Now that strobing HUD corruption and camera drift are real code, this is a live photosensitivity concern rather than a hypothetical one. `BACKLOG.md` recommends promoting it into Milestone 5.
+- **No `prefers-reduced-motion` path** *outside `src/presence/`, which honours it.* Now that strobing HUD corruption and camera drift are real code, this is a live photosensitivity concern rather than a hypothetical one. `BACKLOG.md` recommends promoting it into Milestone 5.
 - **No geometry/material disposal anywhere.** Harmless while nothing is torn down; becomes a leak the moment acts start rebuilding scene contents.
 
 ## Legacy reference
