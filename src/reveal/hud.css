@@ -6,9 +6,26 @@
   color: #c8c8c8;
 }
 
+/* Act 3 only — the relabel sits above the digits rather than replacing them. */
+.reveal-hud__score-label {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  color: #ffb020;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.reveal-hud__score-label--visible {
+  opacity: 0.85;
+}
+
 .reveal-hud__score {
   position: absolute;
-  top: 24px;
+  top: 30px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 28px;
@@ -16,11 +33,14 @@
   border-bottom: 1px solid #00f0ff;
   padding-bottom: 4px;
   letter-spacing: 0.1em;
-  transition: color 0.4s ease;
+  transition:
+    color 0.4s ease,
+    border-bottom-color 0.4s ease;
 }
 
 .reveal-hud__score--corrupted {
   color: #ff3d7a;
+  border-bottom-color: #ff3d7a;
 }
 
 .reveal-hud__score--act3 {
@@ -29,11 +49,29 @@
   font-size: 22px;
 }
 
+/*
+ * MOODBOARD.md: green/red are reserved exclusively for score feedback and must
+ * stay legible under any HUD state, so these deliberately override the act
+ * colouring above rather than blending with it.
+ */
+.reveal-hud__gain {
+  color: #00ffa0;
+}
+
+.reveal-hud__loss {
+  color: #ff2d2d;
+}
+
+.reveal-hud__separator {
+  opacity: 0.6;
+}
+
 .reveal-hud__designation {
   position: absolute;
   top: 20px;
   right: 24px;
   font-size: 11px;
+  letter-spacing: 0.12em;
   color: #c8c8c8;
   opacity: 0;
   transition: opacity 0.6s ease;
@@ -63,13 +101,19 @@
   opacity: 1;
 }
 
-.reveal-hud__act-label {
+/* Only on watcher-cut frames — the fragment is meant to be barely caught. */
+.reveal-hud__feed {
   position: absolute;
-  bottom: 24px;
+  top: 50%;
   left: 24px;
-  font-size: 11px;
-  color: #c8c8c8;
-  opacity: 0.6;
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: #ff3d7a;
+  opacity: 0;
+}
+
+.reveal-hud__feed--visible {
+  opacity: 0.8;
 }
 
 .reveal-hud__debug {
@@ -80,7 +124,7 @@
   max-width: 90vw;
   font-size: 11px;
   color: #c8c8c8;
-  opacity: 0.5;
+  opacity: 0.35;
   line-height: 1.6;
   text-align: center;
 }

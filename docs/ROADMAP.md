@@ -83,6 +83,14 @@ AI difficulty-state changes from Branch 2, and drop in the environmental
 lore fragments specified in `LORE.md` (designation readout, relabeled
 score language, HUD flicker text) exactly where `MOODBOARD.md` already
 places them — no new delivery channels invented.
+**Trigger — resolved:** rally count primary, score as a backstop. Act 1→2 at
+10 cumulative rallies or 3 combined points; Act 2→3 at 5 combined points or
+26 rallies. Rally count measures engagement rather than skill, so a strong
+and a weak player reach the escalation at a comparable point in their
+experience; the score backstops stop a lopsided, low-rally match from
+finishing with no climax. Both transitions also hold a minimum dwell
+(`ACT_ONE_MIN_SECONDS`, `ACT_TWO_MIN_SECONDS`), overridden near match point
+so Act 3 always gets runway before the dossier.
 **Done when:** A full playthrough starts as real Pong, transitions through
 the reveal at the designed trigger point with the correct HUD/lore
 fragments appearing, and the opponent's behavior visibly and honestly
