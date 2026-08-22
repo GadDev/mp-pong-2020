@@ -48,10 +48,10 @@ window.addEventListener("keydown", (event) => {
 });
 window.addEventListener("click", () => audio.resume(), { once: true });
 
-console.info(
-  "[reveal spike] Press P to run the scripted Act I->II->III sequence, " +
-    "1/2/3 to jump acts directly, H to trigger a hit blip.",
-);
+// Plays start-to-finish on load, per ROADMAP.md Milestone 1 ("scripted or
+// debug-key-triggered transition") — debug keys above are for re-running/
+// jumping acts during review, not the only way to see it.
+timeline.startAutoplay(performance.now() / 1000);
 
 function animate(): void {
   const now = performance.now() / 1000;

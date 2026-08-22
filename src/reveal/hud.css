@@ -71,3 +71,16 @@
   color: #c8c8c8;
   opacity: 0.6;
 }
+
+.reveal-hud__debug {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90vw;
+  font-size: 11px;
+  color: #c8c8c8;
+  opacity: 0.5;
+  line-height: 1.6;
+  text-align: center;
+}

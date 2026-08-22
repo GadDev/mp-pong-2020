@@ -30,7 +30,19 @@ export class RevealHud {
     this.actLabel = document.createElement("div");
     this.actLabel.className = "reveal-hud__act-label";
 
-    this.root.append(this.score, this.designation, this.panel, this.actLabel);
+    const debugHint = document.createElement("div");
+    debugHint.className = "reveal-hud__debug";
+    debugHint.textContent =
+      "[spike] plays automatically — click/press any key to enable audio · " +
+      "P: replay · 1/2/3: jump act · H: hit blip";
+
+    this.root.append(
+      this.score,
+      this.designation,
+      this.panel,
+      this.actLabel,
+      debugHint,
+    );
     container.appendChild(this.root);
   }
 
