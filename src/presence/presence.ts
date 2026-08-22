@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { CYAN, NEAR_WHITE, VOID_BLACK } from "../reveal/palette";
+import { prefersReducedMotion } from "../motion";
 
 /**
  * The pre-game presence — `EXPLORATION.md` §3, Tier 1 ("the Bit, not the
@@ -86,9 +87,11 @@ export function createPresence(container: HTMLElement): Presence {
 
   // Photosensitivity: no drift, no pulse, no spin. The object still exists
   // and still brightens when it speaks — it just never moves.
-  const reducedMotion = window.matchMedia(
-    "(prefers-reduced-motion: reduce)",
-  ).matches;
+  //
+  // Read per frame via the shared flag rather than latched here at
+  // construction: the presence is built once on the intro screen and lives
+  // for the whole pre-game session, so a boot-time read would ignore a player
+  // who turns the OS setting on while looking at it.
 
   const pointer = new THREE.Vector2(0, 0);
   // Starts settled but not stopped: a player who never touches the mouse —
@@ -163,7 +166,7 @@ export function createPresence(container: HTMLElement): Presence {
       QUIET_OPACITY + (SPEAKING_OPACITY - QUIET_OPACITY) * speakingMix;
     material.color.copy(quietColor).lerp(speakingColor, speakingMix * 0.8);
 
-    if (reducedMotion) return;
+    if (prefersReducedMotion()) return;
 
     sincePointerMove += dt;
     const attentive = sincePointerMove < SETTLE_AFTER;

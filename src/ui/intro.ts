@@ -1,4 +1,5 @@
 import "./theme.css";
+import { GAME_TITLE } from "./title";
 
 export interface IntroScreenOptions {
   onSkip: () => void;
@@ -11,16 +12,16 @@ export interface IntroScreenOptions {
  */
 export function createIntroScreen({ onSkip }: IntroScreenOptions): HTMLElement {
   const root = document.createElement("div");
-  // Transparent so the pre-game presence (src/presence/) shows through; no
-  // grid lines here, per MOODBOARD.md's "nothing that telegraphs the arena."
-  root.className = "screen screen--transparent";
-  root.style.backgroundImage = "none";
+  // Transparent so the pre-game presence (src/presence/) shows through, and
+  // `--void` on top of it to drop the grid image, per MOODBOARD.md's "nothing
+  // that telegraphs the arena." `--void` also stops the line-scroll animation,
+  // which is why this is two classes rather than an inline `backgroundImage`:
+  // an inline style can't be switched off by the reduced-motion media query.
+  root.className = "screen screen--transparent screen--void";
 
   const title = document.createElement("div");
-  title.className = "screen__title";
-  title.textContent = "PONG";
-  title.style.opacity = "0";
-  title.style.transition = "opacity 1.2s ease";
+  title.className = "screen__title screen__title--intro";
+  title.textContent = GAME_TITLE;
 
   const hint = document.createElement("div");
   hint.className = "screen__hint";
@@ -29,7 +30,7 @@ export function createIntroScreen({ onSkip }: IntroScreenOptions): HTMLElement {
   root.append(title, hint);
 
   requestAnimationFrame(() => {
-    title.style.opacity = "1";
+    title.classList.add("screen__title--shown");
   });
 
   const skipDelayTimer = setTimeout(() => {

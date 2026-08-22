@@ -42,8 +42,18 @@ Milestone 1's reveal spike ran on dummy geometry; Milestone 3 replaced it with
 real Pong and Milestone 4 wired the reveal to game-state triggers. The
 three-module boundary `TECHSTACK.md` specifies is now real code, not a plan.
 
+**Parts of Milestone 5 have also landed early, out of roadmap order** — the
+parts that don't depend on gameplay existing: the `EffectComposer` stack, the
+`prefers-reduced-motion` path, and the menu-chrome visual finish. The rest of
+M5 (final audio assets, the act-by-act texture match "end to end", Act 3
+dossier styling) is genuinely blocked on Milestones 3/4. The reduced-motion
+flag was pulled forward deliberately, on `BACKLOG.md`'s reasoning that it is
+cheap to design in during M5 and expensive to retrofit once every effect is
+hand-tuned.
+
 ```
 src/main.ts                    # rAF loop, input, screen routing, debug keys
+src/motion.ts                  # prefers-reduced-motion flag (live, not read-once)
 src/persistence.ts             # localStorage: volume, skip-intro, hasSeenReveal
 src/game/
   gameState.ts                 # ball/paddle physics, score, rally count, win
@@ -51,13 +61,17 @@ src/game/
   presentationState.ts         # Act state machine + reveal triggers
   gameState.test.ts            # collision/deflection/score/prediction
   presentationState.test.ts    # trigger, dwell, disarming, pulse tests
-src/render/renderer.ts         # owns scene graph, camera, HUD, material swaps
+src/render/renderer.ts         # owns scene graph, camera, HUD, composer,
+                               #   material swaps
 src/reveal/
   camera.ts                    # per-act camera on one shared PerspectiveCamera
   hud.ts / hud.css             # DOM-overlay HUD that degrades across acts
   audio.ts                     # procedural Web Audio placeholder (M5 replaces)
+  postprocessing.ts            # M5 composer: bloom + grain + gated aberration
+  framerate.ts                 # per-act frame-time probe; inert unless DEV
   scene.ts                     # the real arena: court, net, two paddles, ball
   palette.ts                   # MOODBOARD.md hex tokens
+src/presence/                  # pre-game presence: its own scene + voice
 src/ui/                        # DOM-overlay chrome: intro, mainMenu, options,
                                #   pause, dossier, theme.css
 ```
@@ -157,16 +171,12 @@ Two independent workflows on push to `main`:
 
 Real, small, worth fixing when touched — not blockers:
 
-- **No `prefers-reduced-motion` path outside `src/presence/`,** which honours
-  it. Strobing HUD corruption, camera drift
-  and the watcher cut are all real code now, so this is a live
-  photosensitivity concern rather than a hypothetical one. `BACKLOG.md`
-  recommends promoting it into Milestone 5.
 - **Disposal is only wired for teardown, not for act transitions.**
-  `buildArena()` tracks what it allocates and `Renderer.dispose()` releases it,
-  and the act palette shifts mutate existing materials in place rather than
-  allocating. But nothing calls `Renderer.dispose()` in practice, and the
-  moment an act starts *rebuilding* scene contents that becomes a leak.
+  `buildArena()` tracks what it allocates, `Renderer.dispose()` releases it
+  along with the composer's render targets, and the act palette shifts mutate
+  existing materials in place rather than allocating. But nothing calls
+  `Renderer.dispose()` in practice, and the moment an act starts *rebuilding*
+  scene contents that becomes a leak.
 - **Act 3 orbital control is screen-linear, not world-aligned.** The paddle
   follows pointer X mapped across the viewport rather than raycast into the
   floor plane, deliberately: a raycast would send the paddle flying on every
@@ -178,6 +188,20 @@ Real, small, worth fixing when touched — not blockers:
   a scripted player at three skill levels, not against humans.
   `BACKLOG.md` already flags trigger-point tuning as a first-class post-ship
   task; this is that task.
+- **Frame rate is unverified on the real arena.** The M5 done-condition names
+  a *mid-range laptop GPU*. The composer was measured at 120 fps / ~10 ms p95
+  across all three acts, but that was on an Apple Silicon Mac *and* against
+  the old M1 dummy scene, before Milestone 3's real arena existed — so the
+  numbers do not transfer on either axis. Re-measure;
+  `reveal/framerate.ts` prints them per act in dev.
+- **Reduced motion is wired but only smoke-tested against the dummy scene.**
+  `src/motion.ts` is the single source — consumed by `camera.ts`, `hud.ts`,
+  `postprocessing.ts`, `presence/presence.ts` and `ui/theme.css`. Don't call
+  `matchMedia` directly anywhere else; the flag is live precisely so a player
+  who toggles the OS setting mid-session is honoured. It has not been
+  re-checked against real gameplay — in particular whether holding the Act 3
+  orbit still leaves the ball readable, which was not a question when nothing
+  was playable.
 
 ## Legacy reference
 

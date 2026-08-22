@@ -1,6 +1,13 @@
 import "./hud.css";
 import type { GameState, StepEvents } from "../game/gameState";
 import { Act, type PresentationFrame } from "../game/presentationState";
+import { prefersReducedMotion } from "../motion";
+
+/**
+ * Under reduced motion the one-frame flicker is held this long instead —
+ * same information, delivered as a state change rather than a flash.
+ */
+const REDUCED_FLICKER_HOLD_SECONDS = 0.5;
 
 /**
  * MOODBOARD.md's Act 2 score flicker: "unfamiliar symbols… implying a
@@ -41,6 +48,8 @@ export class RevealHud {
   private playerFlash = 0;
   private operatorFlash = 0;
   private fragmentIndex = 0;
+  /** Seconds left on the reduced-motion held flicker; unused otherwise. */
+  private corruptHold = 0;
 
   constructor(container: HTMLElement) {
     this.root = document.createElement("div");
@@ -102,9 +111,23 @@ export class RevealHud {
   ): void {
     this.playerFlash = Math.max(0, this.playerFlash - dt);
     this.operatorFlash = Math.max(0, this.operatorFlash - dt);
+    this.corruptHold = Math.max(0, this.corruptHold - dt);
 
     // The Act 2 flicker is the one moment the digits aren't the score.
-    const corrupted = frame.act === Act.TWO && frame.flickerPulse;
+    //
+    // `flickerPulse` is true for exactly one update, which is the correct
+    // default and the whole point of moving it into the act machine. Under
+    // reduced motion a one-frame swap *is* the strobe, so the same pulse is
+    // stretched into a held, legible state change instead. The damping lives
+    // here rather than in `presentationState`: that module is game logic and
+    // must not know what the display prefers.
+    const reduced = prefersReducedMotion();
+    if (frame.act === Act.TWO && frame.flickerPulse && reduced) {
+      this.corruptHold = REDUCED_FLICKER_HOLD_SECONDS;
+    }
+    const corrupted =
+      frame.act === Act.TWO &&
+      (reduced ? this.corruptHold > 0 : frame.flickerPulse);
     if (corrupted) {
       // Each side gets its own glyphs; the " : " separator between the two
       // spans stays put, so the corrupted state reads as the same layout with

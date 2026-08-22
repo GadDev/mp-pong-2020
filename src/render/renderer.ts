@@ -11,6 +11,8 @@ import { updateRevealCamera } from "../reveal/camera";
 import { RevealHud } from "../reveal/hud";
 import { buildArena, OPERATOR_REVEALED_COLOR, type Arena } from "../reveal/scene";
 import { CYAN, SMOG_PURPLE_BLACK, VOID_BLACK } from "../reveal/palette";
+import { createRevealComposer, type RevealComposer } from "../reveal/postprocessing";
+import { FrameRateProbe } from "../reveal/framerate";
 
 /**
  * TECHSTACK.md module 3 of 3. Reads `GameState` and `PresentationFrame` and
@@ -22,6 +24,8 @@ export class Renderer {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly arena: Arena;
   private readonly hud: RevealHud;
+  private readonly composer: RevealComposer;
+  private readonly frameRate = new FrameRateProbe();
   private readonly background = new THREE.Color(VOID_BLACK);
   private readonly targetBackground = new THREE.Color();
   private readonly operatorColor = new THREE.Color(CYAN);
@@ -38,12 +42,23 @@ export class Renderer {
       200,
     );
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    // No `antialias`: with the composer in front, the renderer's MSAA never
+    // reaches the screen, so the flag would be a misleading no-op. Edge
+    // aliasing on this wireframe-heavy scene is left to the grain and bloom
+    // rather than spending the second budgeted pass on SMAA.
+    this.renderer = new THREE.WebGLRenderer();
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(this.renderer.domElement);
 
+    this.composer = createRevealComposer(
+      this.renderer,
+      this.arena.scene,
+      this.camera,
+    );
+
     this.hud = new RevealHud(container);
+    this.frameRate.attachReadout(container);
     window.addEventListener("resize", this.handleResize);
   }
 
@@ -51,6 +66,10 @@ export class Renderer {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    // The composer owns its own render targets, and `setSize` forwards to
+    // every pass. Without this they keep their old dimensions and the canvas
+    // renders blurry after a resize, with no error to point at.
+    this.composer.setSize(window.innerWidth, window.innerHeight);
   };
 
   /**
@@ -89,7 +108,13 @@ export class Renderer {
 
     this.applyActPalette(frame.act, dt);
     this.hud.update(state, frame, watcherCut, dt);
-    this.renderer.render(this.arena.scene, this.camera);
+
+    // Chromatic aberration is scoped to exactly the watcher cut — the same
+    // boolean the camera just returned, so the two can't disagree about which
+    // frames are "watcher" frames.
+    this.composer.update(frame.act, watcherCut);
+    this.composer.render();
+    this.frameRate.sample(frame.act);
   }
 
   /**
@@ -119,6 +144,7 @@ export class Renderer {
   dispose(): void {
     window.removeEventListener("resize", this.handleResize);
     this.arena.dispose();
+    this.composer.dispose();
     this.renderer.dispose();
   }
 }

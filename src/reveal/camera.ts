@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Act } from "../game/presentationState";
+import { motionScale, prefersReducedMotion } from "../motion";
 
 // Act 1: fixed low, near-horizontal Tron shot from behind the player's paddle,
 // looking down the *length* of the court (MOODBOARD.md is explicit that this is
@@ -77,7 +78,9 @@ export function updateRevealCamera(
 
     // Handheld-style micro-drift: a few pixels of sway, introduced gradually
     // as the operator/observer presence becomes felt, never full shake.
-    const driftAmount = 0.04 * eased;
+    // Zeroed under reduced motion — the pull-back survives (it's the reveal),
+    // the sway doesn't (it's texture).
+    const driftAmount = motionScale(0.04 * eased);
     position.x += Math.sin(driftSeconds * 0.7) * driftAmount;
     position.y += Math.sin(driftSeconds * 0.9 + 1.3) * driftAmount * 0.6;
 
@@ -96,7 +99,13 @@ export function updateRevealCamera(
 
   // Orbit starts from the Act 2 end position's bearing so the transition into
   // Act 3 doesn't jump-cut on its first frame.
-  const angle = elapsedInAct * ACT_THREE_ANGULAR_SPEED;
+  // Reduced motion holds the orbit at its opening bearing rather than
+  // drifting continuously. The Act 3 vantage — high, outside, looking down —
+  // is what communicates the change of perspective; that it *moves* is the
+  // part that provokes.
+  const angle = prefersReducedMotion()
+    ? 0
+    : elapsedInAct * ACT_THREE_ANGULAR_SPEED;
   camera.position.set(
     Math.sin(angle) * ACT_THREE_RADIUS,
     ACT_THREE_HEIGHT,
