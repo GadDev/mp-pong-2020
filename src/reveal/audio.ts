@@ -8,13 +8,19 @@ import { Act } from "./timeline";
  */
 export class RevealAudio {
   private readonly context: AudioContext;
+  private readonly masterGain: GainNode;
   private readonly padGain: GainNode;
   private readonly padFilter: BiquadFilterNode;
   private readonly pad: OscillatorNode;
   private readonly padSub: OscillatorNode;
+  private active = true;
 
   constructor() {
     this.context = new AudioContext();
+
+    this.masterGain = this.context.createGain();
+    this.masterGain.gain.value = 0.7;
+    this.masterGain.connect(this.context.destination);
 
     this.padFilter = this.context.createBiquadFilter();
     this.padFilter.type = "lowpass";
@@ -34,7 +40,7 @@ export class RevealAudio {
     this.pad.connect(this.padFilter);
     this.padSub.connect(this.padFilter);
     this.padFilter.connect(this.padGain);
-    this.padGain.connect(this.context.destination);
+    this.padGain.connect(this.masterGain);
 
     this.pad.start();
     this.padSub.start();
@@ -47,7 +53,21 @@ export class RevealAudio {
     }
   }
 
+  /** Options screen volume slider — scales everything this instance plays. */
+  setMasterVolume(volume: number): void {
+    this.masterGain.gain.setTargetAtTime(volume, this.context.currentTime, 0.05);
+  }
+
+  /** Menu/pause mutes the ambient bed immediately rather than waiting on update()'s slow ramp. */
+  setActive(active: boolean): void {
+    this.active = active;
+    if (!active) {
+      this.padGain.gain.setTargetAtTime(0, this.context.currentTime, 0.1);
+    }
+  }
+
   update(act: Act, elapsedInAct: number, nowSeconds: number): void {
+    if (!this.active) return;
     const t = this.context.currentTime;
 
     if (act === Act.ONE) {
@@ -77,7 +97,7 @@ export class RevealAudio {
     const osc = this.context.createOscillator();
     const gain = this.context.createGain();
     osc.connect(gain);
-    gain.connect(this.context.destination);
+    gain.connect(this.masterGain);
 
     osc.type = "square";
     const baseFrequency = 660;

@@ -6,7 +6,10 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #000;
+  /* MOODBOARD.md: #0A0E14 is "the base of everything"; true #000 is
+     reserved for backdrop-only use. Matches ui/theme.css so there is no
+     seam between the canvas layer and the DOM overlays. */
+  background: #0a0e14;
 }
 
 canvas {

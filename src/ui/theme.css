@@ -1,0 +1,101 @@
+/* Shared DOM-overlay chrome — MOODBOARD.md "Menu & intro screens": built
+   entirely from the Act 1 palette/typography, deliberately plain, no boxes
+   or panels beyond a thin focus underline. */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  background-color: #0a0e14;
+  background-image: linear-gradient(
+      rgba(0, 240, 255, 0.06) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  font-family: "Courier New", monospace;
+  color: #c8c8c8;
+  z-index: 20;
+}
+
+/* Pause: the game scene stays visible but dimmed, not replaced. */
+.screen--scrim {
+  background-color: rgba(10, 14, 20, 0.75);
+  background-image: none;
+}
+
+.screen__title {
+  font-size: 48px;
+  letter-spacing: 0.35em;
+  color: #00f0ff;
+  text-transform: uppercase;
+}
+
+.screen__hint {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  font-size: 11px;
+  color: #c8c8c8;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.screen__hint--visible {
+  opacity: 0.7;
+}
+
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.menu-item {
+  background: none;
+  border: none;
+  padding: 0 0 4px;
+  font-family: inherit;
+  font-size: 20px;
+  letter-spacing: 0.15em;
+  color: #00f0ff;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+.menu-item:focus-visible,
+.menu-item:hover {
+  outline: none;
+  border-bottom-color: #00f0ff;
+}
+
+.menu-item:disabled {
+  color: #4a5560;
+  cursor: default;
+}
+
+.options-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  color: #c8c8c8;
+  text-transform: uppercase;
+}
+
+.options-row input[type="range"] {
+  accent-color: #00f0ff;
+}
+
+.options-row input[type="checkbox"] {
+  accent-color: #00f0ff;
+  width: 16px;
+  height: 16px;
+}

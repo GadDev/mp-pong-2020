@@ -33,8 +33,7 @@ export class RevealHud {
     const debugHint = document.createElement("div");
     debugHint.className = "reveal-hud__debug";
     debugHint.textContent =
-      "[spike] plays automatically — click/press any key to enable audio · " +
-      "P: replay · 1/2/3: jump act · H: hit blip";
+      "[spike] Esc: pause · P: replay reveal · 1/2/3: jump act · H: hit blip";
 
     this.root.append(
       this.score,

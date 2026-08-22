@@ -45,9 +45,15 @@ export class RevealTimeline {
     this.onActChange?.(act);
   }
 
-  /** Starts the scripted Act I -> II -> III sequence from wherever we are. */
+  /**
+   * (Re)starts the scripted Act I -> II -> III sequence from wherever we
+   * are. Bypasses setAct()'s same-act guard directly — Restart pressed
+   * while still in Act I must reset actEnteredAt, not no-op on it.
+   */
   startAutoplay(nowSeconds: number): void {
-    this.setAct(Act.ONE, nowSeconds);
+    this.act = Act.ONE;
+    this.actEnteredAt = nowSeconds;
+    this.onActChange?.(Act.ONE);
     this.autoplayUntil = nowSeconds + AUTOPLAY_ACT_DURATION[Act.ONE];
   }
 

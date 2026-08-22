@@ -5,11 +5,20 @@ import { updateRevealCamera } from "./reveal/camera";
 import { RevealHud } from "./reveal/hud";
 import { RevealAudio } from "./reveal/audio";
 import { Act, RevealTimeline } from "./reveal/timeline";
+import { createIntroScreen } from "./ui/intro";
+import { createMainMenu } from "./ui/mainMenu";
+import { createOptionsScreen } from "./ui/options";
+import { createPauseOverlay } from "./ui/pause";
+import { getSkipIntro, getVolume, setSkipIntro, setVolume } from "./persistence";
 
-const app = document.querySelector<HTMLDivElement>("#app");
-if (!app) {
+const appElement = document.querySelector<HTMLDivElement>("#app");
+if (!appElement) {
   throw new Error("#app root element not found");
 }
+const app: HTMLDivElement = appElement;
+
+const gameLayer = document.createElement("div");
+app.appendChild(gameLayer);
 
 const { scene, ball } = buildRevealScene();
 
@@ -22,11 +31,12 @@ const camera = new THREE.PerspectiveCamera(
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-app.appendChild(renderer.domElement);
+gameLayer.appendChild(renderer.domElement);
 
-const hud = new RevealHud(app);
+const hud = new RevealHud(gameLayer);
 const audio = new RevealAudio();
 const timeline = new RevealTimeline();
+audio.setMasterVolume(getVolume());
 
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -34,11 +44,127 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Milestone 1 debug controls (not player-facing menu — see LORE.md's
-// "discoverable once" rule; this spike bypasses it deliberately for review).
+type Screen = "intro" | "menu" | "options" | "playing" | "paused";
+
+// A clock that only advances while actually playing — RevealTimeline's
+// autoplay schedule compares against this, not wall-clock time, so pausing
+// (or sitting in the menu after a quit) doesn't cause it to "catch up" and
+// jump acts the moment play resumes.
+let playedSeconds = 0;
+let lastPlayingTimestamp: number | null = null;
+
+function tickGameClock(isPlaying: boolean): number {
+  const raw = performance.now() / 1000;
+  if (isPlaying) {
+    if (lastPlayingTimestamp !== null) {
+      playedSeconds += raw - lastPlayingTimestamp;
+    }
+    lastPlayingTimestamp = raw;
+  } else {
+    lastPlayingTimestamp = null;
+  }
+  return playedSeconds;
+}
+
+function resetGameClock(): void {
+  playedSeconds = 0;
+  lastPlayingTimestamp = null;
+}
+
+let currentScreen: Screen = getSkipIntro() ? "menu" : "intro";
+let overlay: HTMLElement | null = null;
+// Milestone 2 (ROADMAP.md): Continue is in-memory only, never persisted —
+// true once a match has started, so quitting to menu from pause re-offers it.
+let hasActiveMatch = false;
+
+function showScreen(screen: Screen): void {
+  currentScreen = screen;
+  overlay?.remove();
+  overlay = null;
+
+  const gameVisible = screen === "playing" || screen === "paused";
+  gameLayer.style.display = gameVisible ? "block" : "none";
+
+  if (screen === "intro") {
+    overlay = createIntroScreen({ onSkip: () => showScreen("menu") });
+  } else if (screen === "menu") {
+    overlay = createMainMenu({
+      canContinue: hasActiveMatch,
+      onNewGame: startNewGame,
+      onContinue: continueGame,
+      onOptions: () => showScreen("options"),
+    });
+  } else if (screen === "options") {
+    overlay = createOptionsScreen(
+      { volume: getVolume(), skipIntro: getSkipIntro() },
+      {
+        onVolumeChange: (volume) => {
+          setVolume(volume);
+          audio.setMasterVolume(volume);
+        },
+        onSkipIntroChange: setSkipIntro,
+        onBack: () => showScreen("menu"),
+      },
+    );
+  } else if (screen === "paused") {
+    overlay = createPauseOverlay({
+      onResume: resumeGame,
+      onRestart: restartGame,
+      onQuitToMenu: quitToMenu,
+    });
+  }
+
+  if (overlay) app.appendChild(overlay);
+}
+
+function startNewGame(): void {
+  hasActiveMatch = true;
+  resetGameClock();
+  timeline.startAutoplay(0);
+  audio.setActive(true);
+  showScreen("playing");
+}
+
+function continueGame(): void {
+  audio.setActive(true);
+  showScreen("playing");
+}
+
+function pauseGame(): void {
+  audio.setActive(false);
+  showScreen("paused");
+}
+
+function resumeGame(): void {
+  audio.setActive(true);
+  showScreen("playing");
+}
+
+function restartGame(): void {
+  resetGameClock();
+  timeline.startAutoplay(0);
+  audio.setActive(true);
+  showScreen("playing");
+}
+
+function quitToMenu(): void {
+  audio.setActive(false);
+  showScreen("menu");
+}
+
+// Milestone 1 debug controls, gated to when a match is actually on screen —
+// see LORE.md's "discoverable once" rule; never exposed via the menu.
 window.addEventListener("keydown", (event) => {
   audio.resume();
-  const now = performance.now() / 1000;
+
+  if (event.key === "Escape") {
+    if (currentScreen === "playing") pauseGame();
+    else if (currentScreen === "paused") resumeGame();
+    return;
+  }
+
+  if (currentScreen !== "playing") return;
+  const now = playedSeconds;
   if (event.key === "1") timeline.setAct(Act.ONE, now);
   else if (event.key === "2") timeline.setAct(Act.TWO, now);
   else if (event.key === "3") timeline.setAct(Act.THREE, now);
@@ -46,27 +172,31 @@ window.addEventListener("keydown", (event) => {
   else if (event.key === "h" || event.key === "H")
     audio.playBlip(timeline.getAct());
 });
-window.addEventListener("click", () => audio.resume(), { once: true });
+window.addEventListener("click", () => audio.resume());
 
-// Plays start-to-finish on load, per ROADMAP.md Milestone 1 ("scripted or
-// debug-key-triggered transition") — debug keys above are for re-running/
-// jumping acts during review, not the only way to see it.
-timeline.startAutoplay(performance.now() / 1000);
+showScreen(currentScreen);
 
 function animate(): void {
-  const now = performance.now() / 1000;
-  timeline.tickAutoplay(now);
-  const act = timeline.getAct();
-  const elapsedInAct = timeline.elapsed(now);
+  requestAnimationFrame(animate);
+  const now = tickGameClock(currentScreen === "playing");
+  if (currentScreen !== "playing" && currentScreen !== "paused") return;
 
-  ball.position.x = Math.sin(now * 0.8) * 3;
+  // Paused: freeze game/HUD/audio state, but keep painting the same frame —
+  // an idle WebGL canvas that stops issuing draw calls while still visible
+  // is the more fragile state to leave a GPU-composited page in.
+  if (currentScreen === "playing") {
+    timeline.tickAutoplay(now);
+    const act = timeline.getAct();
+    const elapsedInAct = timeline.elapsed(now);
 
-  updateRevealCamera(camera, act, elapsedInAct, now);
-  hud.update(act, elapsedInAct);
-  audio.update(act, elapsedInAct, now);
+    ball.position.x = Math.sin(now * 0.8) * 3;
+
+    updateRevealCamera(camera, act, elapsedInAct, now);
+    hud.update(act, elapsedInAct);
+    audio.update(act, elapsedInAct, now);
+  }
 
   renderer.render(scene, camera);
-  requestAnimationFrame(animate);
 }
 
 animate();
