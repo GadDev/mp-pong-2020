@@ -1,5 +1,13 @@
 # mp-pong-2020
 
+## 1.1.0
+
+### Minor Changes
+
+- [`a7e859f`](https://github.com/GadDev/mp-pong-2020/commit/a7e859fbffc5698be073aaa88b28aa0d7907f4a4) Thanks [@GadDev](https://github.com/GadDev)! - Replace the vanilla-JS game with a Vite + TypeScript + Three.js project skeleton (Milestone 0): `npm run dev` renders a rotating placeholder cube, `npm run build` produces a static bundle. Adds ESLint/Prettier and Vitest tooling per TECHSTACK.md.
+
+- [`d1fcf1d`](https://github.com/GadDev/mp-pong-2020/commit/d1fcf1def193d9f7be5edc4df68aa673b14c2eb9) Thanks [@GadDev](https://github.com/GadDev)! - Milestone 1: reveal spike. Dummy court geometry (grid, two blocks, a dot) runs through a debug-key or scripted (`P`) Act I -> II -> III sequence: fixed Tron-style camera -> slow imperceptible pull-back with micro-drift -> orbital Blade Runner camera with a jarring watcher cut, with HUD text/color and a procedural ambient-audio bed shifting in lockstep. Camera/HUD/audio pacing is not final — this proves the reveal can land, not the production polish (Milestone 5).
+
 ## 1.0.2
 
 ### Patch Changes
