@@ -39,7 +39,16 @@ Three camera modes, one per act of the twist:
 
 **Act 3 — "The recruitment" (Blade Runner-style)**
 - Camera can break from the fixed axis entirely for the first time — slow orbital drift around the court, volumetric fog rolling through the grid lines, rain-slicked reflections on the floor plane.
-- Occasional cut to a "watcher" POV — a brief, deliberately jarring shot from outside the court looking in, implying the player was being observed the whole time.
+- A cut to a "watcher" POV — a brief, deliberately jarring shot from outside the court looking in, implying the player was being observed the whole time. **Once, mid-act** — not "occasional." Per `LORE.md`, its value is entirely in being singular; a recurring jarring cut becomes a transition.
+- **Act 3 has three internal beats and they are strictly ordered** —
+  relabel, then the watcher cut, then the disclosure after the final point.
+  See `LORE.md`'s beat sheet. Shipping them simultaneously is the failure
+  mode; this document specifies all three but never said they were a
+  sequence.
+- **"The recruitment" is inverted, not literal.** Nobody is recruited —
+  amber's "recruitment beats" escalate *toward* a disclosure and never land
+  on an offer. No second-person copy at any point (`YOU HAVE BEEN SELECTED`
+  and its cousins are out). `LORE.md` has the full reasoning.
 
 **Technical note for implementation:** all three modes should share one `PerspectiveCamera` instance with animated `position`/`lookAt` targets rather than swapping cameras — keeps transitions smooth and avoids the jump-cut feeling except where Act 3's "watcher" cut is deliberately jarring.
 
@@ -53,6 +62,7 @@ The HUD itself should carry the twist — it's not just an overlay, it's a diege
 - Typeface: a monospace or geometric sans (mimicking early terminal/arcade fonts — think the Tron identity disc's UI, not a modern game HUD).
 - Score display: simple cyan digits, thin 1px underline, positioned top-center. No panels, no borders — just floating text, like a heads-up projection.
 - No player name, no menu chrome. Deliberately sparse, so its later corruption reads as a real change rather than "more UI appearing."
+- **No name for the opponent either.** `OPERATOR` first appears in Act 2 with the designation readout (`LORE.md`, canon glossary); in Act 1 the opponent is nameless, because a label is a tell. Consequence: nothing in Act 1 — including a pre-escalation match-end screen — may call it `CPU`, `AI`, or `COMPUTER`. A match ending before the escalation resolves on the score alone.
 
 **Act 2 HUD — glitching, questioning**
 - Occasional single-frame flicker where the score digits are briefly replaced by unfamiliar symbols (implying a different, older, or non-human counting system underneath) before snapping back.
@@ -64,11 +74,22 @@ The HUD itself should carry the twist — it's not just an overlay, it's a diege
   Starfighter) crossed with a corporate surveillance readout (Blade Runner's
   Voight-Kampff aesthetic: sparse, clinical, faintly threatening) — right up
   until it isn't threatening at all.
-- Score language can still shift ("hits" become "threat assessments," or
-  similar) as an early Act 3 beat, before the actual reveal — this keeps the
-  cold, clinical tone intact for a moment so the eventual warmth of the real
-  reveal lands as a genuine tonal shift, not just more of the same.
-- **The actual climax**: the "system" is forced to disclose its own
+- Score language shifts as an early Act 3 beat, before the actual reveal —
+  this keeps the cold, clinical tone intact for a moment so the eventual
+  warmth of the real reveal lands as a genuine tonal shift, not just more of
+  the same. **The sanctioned terms are `ADAPTATION INDEX` (score label) and
+  `RESPONSE CYCLE n` (rally counter), per `LORE.md`'s canon glossary.** This
+  document previously proposed "threat assessments, or similar"; that term
+  is retired — "threat" promises a hostility the confirmed ending explicitly
+  disclaims, and "or similar" is how the project ended up with three
+  vocabularies for one idea.
+- **The relabeling is label-only.** `ADAPTATION INDEX` is a caption above
+  the same two score digits, in the same position, with the same green/red
+  coding. Act 3 may rename anything and re-skin everything; it may not
+  change what the score digits mean. (See the constant below — this is that
+  rule applied to the one act most likely to break it.)
+- **The actual climax**, firing **after the match's final point, regardless
+  of who won** (`LORE.md`): the "system" is forced to disclose its own
   identity. The dense HUD panel resolves into something that reads like a
   decrypted personnel file or an ID-disc profile — not a joke, an accurate
   one — showing name, role/title, years active, core specializations, and

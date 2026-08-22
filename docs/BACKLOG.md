@@ -93,20 +93,22 @@ deploy.
 
 ## Tier 2 — plausible, needs a design decision first
 
-**Epilogue beat after the dossier.** `LORE.md` already parks this as a
-note-for-later: a single additional fragment after the disclosure implying
-what happens next. The reason it's not scoped is that the played-straight
+**Epilogue beat after the dossier.** A single additional fragment after the
+disclosure, implying what happens next. `LORE.md`'s beat sheet states the
+ending as "no epilogue in current scope" and points back here, so this is the
+one place it lives. The reason it's not scoped is that the played-straight
 tone makes it very easy to overreach here — one line too many and the
 clinical register collapses into sentimentality, which is the failure mode
 this tone was chosen to avoid. If it happens, it's one line, and it stays
 in the same voice as everything before it.
 
-**Win/loss differentiation at the climax.** Currently the dossier is the
-climax regardless of match outcome. Arguably correct (the evaluation
-completing is the point, not who won), but it's worth a deliberate
-decision rather than an accident of implementation. My instinct: leave it
-undifferentiated — making the reveal a *reward for winning* turns it into
-an unlock, and a player who loses and gets nothing has been punished with
+~~**Win/loss differentiation at the climax.**~~ **Resolved — undifferentiated,
+as the instinct recorded here proposed.** It's implemented that way
+(`presentationState.ts` sets `climax` on any escalated match ending) and
+`LORE.md`'s beat sheet now states it, so it's no longer an accident of
+implementation waiting to be ratified. Reasoning preserved because it's the
+load-bearing part: making the reveal a *reward for winning* turns it into an
+unlock, and a player who loses and gets nothing has been punished with
 absence of the only thing the game was building toward.
 
 **Trigger-point tuning as a first-class task.** `ROADMAP.md` M4's "rally count

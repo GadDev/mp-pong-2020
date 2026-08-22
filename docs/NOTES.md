@@ -18,6 +18,9 @@ starts fresh without the original chat.
 > | Discoverable once vs. re-triggerable: open | **Discoverable once**, no repeat trigger, no menu path back |
 > | Creative direction: hybrid, pending confirmation | **Hybrid confirmed** (Tron → Starfighter reveal → Blade Runner payoff) |
 > | "Weekly boss fight" replay loop: undecided | **No** — see `BACKLOG.md`, incoherent alongside discoverable-once |
+| THE DIVISION as a real in-fiction organization | **Not canon** — a writers'-room codename for the misdirection, never on screen. `LORE.md` revision note 2 |
+| The recruitment framing "now has a literal answer to 'recruited for what?'" | **It doesn't** — nobody is recruited. The recruitment is inverted: the system discloses itself instead of asking. `LORE.md`, "The recruitment that isn't" |
+| Reveal timing vs. the match: never stated | **Match plays to its natural first-to-N end; dossier resolves after the final point, either outcome** |
 >
 > Current sources of truth: `MISSION.md` (pitch), `LORE.md` (story bible),
 > `MOODBOARD.md` (visual/HUD language), `ROADMAP.md` (sequencing),

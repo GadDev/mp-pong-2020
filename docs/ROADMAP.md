@@ -94,7 +94,12 @@ so Act 3 always gets runway before the dossier.
 **Done when:** A full playthrough starts as real Pong, transitions through
 the reveal at the designed trigger point with the correct HUD/lore
 fragments appearing, and the opponent's behavior visibly and honestly
-changes post-reveal. The climax resolves into the dossier screen specified
+changes post-reveal. **The match plays to its natural first-to-N conclusion
+and the dossier resolves after the final point, regardless of who won** —
+this was never stated here, only implemented; see `LORE.md`'s climax section
+for why waiting beats interrupting. Act 3's three internal beats are also
+strictly ordered (relabel → watcher cut → disclosure), per `LORE.md`'s beat
+sheet. The climax resolves into the dossier screen specified
 in `LORE.md` (name, role, years active, specializations, current focus)
 pulled from the `GadDev/GadDev` profile README, with one working,
 diegetically-framed link (LinkedIn/GitHub). Reaching the reveal for the
@@ -102,7 +107,12 @@ first time sets `hasSeenReveal` in `localStorage`; every subsequent New
 Game checks that flag and, if set, **skips the Act 2/3 escalation
 entirely** — the escalation trigger simply never fires again on that
 device, so the twist is discoverable exactly once, with no menu path back
-to it (confirmed: discoverable once, no repeat trigger).
+to it (confirmed: discoverable once, no repeat trigger). In-fiction this is
+the evaluation being *complete*, not a feature withheld — see `LORE.md`,
+"The second playthrough." **Open against current code:** the flag is
+persisted by `onEscalation`, i.e. at the Act 1→2 transition, so quitting
+mid-escalation spends the one discovery on something never seen. It should
+be written when the dossier renders.
 **Size:** L
 
 ## Milestone 5 — Audio & post-processing polish

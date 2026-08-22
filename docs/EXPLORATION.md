@@ -51,8 +51,12 @@ Not "is it cool." Four constraints, in priority order:
    earn that.
 2. **It doesn't spoil.** Nothing about evaluation, observation, testing,
    subjects, or a person behind the curtain. This kills `OPERATOR`,
-   `SUBJECT`, `EVALUATION`, `THE DIVISION`, and anything with "watcher" in
-   it, however good they look on a title card.
+   `SUBJECT`, `EVALUATION`, and anything with "watcher" in it, however good
+   they look on a title card. (`THE DIVISION` was previously listed here as
+   a spoiler; per `LORE.md`'s reconciliation pass it isn't one — it's simply
+   not canon. The name exists only as a writers'-room codename for the
+   misdirection, appears nowhere in the game, and so is unavailable as a
+   title for the more basic reason that it doesn't refer to anything.)
 3. **It's plausibly a 1982 cabinet.** In-fiction, the disguise *is*
    recreational hardware (`LORE.md`, "The Grid"). A title that sounds like
    an art-house narrative game breaks the disguise before the player
