@@ -1,0 +1,25 @@
+/* Boot fragments spoken by the pre-game presence. Act 1 typography only:
+   small, gray, monospace — never larger or louder than the in-game HUD,
+   per MOODBOARD.md's rule that the chrome stays plainer than the game. */
+
+.presence-voice {
+  position: fixed;
+  inset: auto 0 14vh 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  font-family: "Courier New", monospace;
+  z-index: 10;
+}
+
+.presence-voice__line {
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  color: #c8c8c8;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+
+.presence-voice__line--visible {
+  opacity: 0.75;
+}

@@ -22,6 +22,13 @@
   z-index: 20;
 }
 
+/* Screens the pre-game presence renders behind: the overlay fill has to
+   drop out so the canvas shows through. src/style.css keeps #0A0E14 under
+   everything, so there's still no seam. */
+.screen--transparent {
+  background-color: transparent;
+}
+
 /* Pause: the game scene stays visible but dimmed, not replaced. */
 .screen--scrim {
   background-color: rgba(10, 14, 20, 0.75);

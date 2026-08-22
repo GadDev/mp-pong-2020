@@ -121,7 +121,7 @@ Data flows one direction: input → game state → render. If `renderer.ts` star
 - **`three` is pinned exactly** (`0.185.1`, no caret), because Three.js breaks across minors and there's no regression suite. Don't loosen it.
 - **Green `#00FFA0` / red `#FF2D2D` are reserved exclusively for score feedback**, nowhere else, so they stay readable however much the HUD mutates. (Neither is in `palette.ts` yet — they arrive with real scoring.)
 - **Act 1's camera is dead still.** The stillness is what makes later movement land. Don't add juice to Act 1.
-- **Menus and HUD are DOM overlays, not in-canvas Three.js UI.** Also: the menu must never acknowledge a twist exists, before or after the player has seen it.
+- **Menus and HUD are DOM overlays, not in-canvas Three.js UI.** The one sanctioned exception is `src/presence/` — it's a rendered object *behind* the chrome, not chrome itself; all text, buttons and fragments are still DOM. Also: the menu must never acknowledge a twist exists, before or after the player has seen it.
 - **The reveal is discoverable once per device.** `hasSeenReveal` in `localStorage` permanently disarms escalation; there is deliberately no player-facing route back.
 - **Post-processing is budgeted:** bloom plus *one* stylistic pass. Chromatic aberration is Act-3-watcher-cut only — its value is being rare. (No `EffectComposer` yet; Milestone 5.)
 - **Audio is Howler.js when it's real.** Tone.js was rejected: the need is playback/mixing, not synthesis.
@@ -157,9 +157,8 @@ Two independent workflows on push to `main`:
 
 Real, small, worth fixing when touched — not blockers:
 
-- **`ui/intro.ts` never auto-advances.** `MOODBOARD.md` specifies "a few
-  seconds of void black"; a player who presses nothing waits forever.
-- **No `prefers-reduced-motion` path.** Strobing HUD corruption, camera drift
+- **No `prefers-reduced-motion` path outside `src/presence/`,** which honours
+  it. Strobing HUD corruption, camera drift
   and the watcher cut are all real code now, so this is a live
   photosensitivity concern rather than a hypothetical one. `BACKLOG.md`
   recommends promoting it into Milestone 5.
