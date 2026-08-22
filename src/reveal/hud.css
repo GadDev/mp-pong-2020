@@ -1,0 +1,73 @@
+.reveal-hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  font-family: "Courier New", monospace;
+  color: #c8c8c8;
+}
+
+.reveal-hud__score {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 28px;
+  color: #00f0ff;
+  border-bottom: 1px solid #00f0ff;
+  padding-bottom: 4px;
+  letter-spacing: 0.1em;
+  transition: color 0.4s ease;
+}
+
+.reveal-hud__score--corrupted {
+  color: #ff3d7a;
+}
+
+.reveal-hud__score--act3 {
+  color: #ffb020;
+  border-bottom-color: #ffb020;
+  font-size: 22px;
+}
+
+.reveal-hud__designation {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  font-size: 11px;
+  color: #c8c8c8;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.reveal-hud__designation--visible {
+  opacity: 0.7;
+}
+
+.reveal-hud__panel {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  width: 220px;
+  border: 1px solid #ffb020;
+  background: rgba(26, 18, 32, 0.6);
+  color: #ffb020;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-line;
+  padding: 10px 12px;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.reveal-hud__panel--visible {
+  opacity: 1;
+}
+
+.reveal-hud__act-label {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  font-size: 11px;
+  color: #c8c8c8;
+  opacity: 0.6;
+}
