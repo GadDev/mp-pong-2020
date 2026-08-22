@@ -14,7 +14,7 @@ Two things to understand before touching anything:
 | Doc | What it owns |
 |---|---|
 | `MISSION.md` | Creative pitch, one-sentence hook (spoiler-light, written for repo visitors) |
-| `LORE.md` | Internal story bible — the twist, OPERATOR, HUD copy fragments. **Not player-facing; contains spoilers.** |
+| `LORE.md` | Internal story bible — scenario beat sheet, canon glossary, the twist, OPERATOR, HUD copy fragments. **Not player-facing; contains spoilers.** Start with the beat sheet and glossary; everything after them is the reasoning behind a beat. |
 | `MOODBOARD.md` | Palette (exact hex), three-act camera language, HUD/menu visual spec, typography |
 | `ROADMAP.md` | Milestones 0-6, concrete done-conditions, S/M/L sizing |
 | `TECHSTACK.md` | Every resolved technical decision with its justification |
@@ -202,6 +202,19 @@ Real, small, worth fixing when touched — not blockers:
   re-checked against real gameplay — in particular whether holding the Act 3
   orbit still leaves the ball readable, which was not a question when nothing
   was playable.
+- **Three canon violations against `LORE.md`, all one-line copy fixes.**
+  `reveal/hud.ts` still ships `THREAT ASSESSMENT: ACTIVE` in the Act 3 panel
+  — that term is retired in favour of `ADAPTATION INDEX` / `RESPONSE CYCLE`,
+  partly on tone (it promises a hostility the ending disclaims). Its Act 3
+  audio-adjacent fragments should be present tense (`FEED 03 — RECORDING`,
+  not `ARCHIVED`), or they imply the match is a replay. And `ui/result.ts`
+  says `OPERATOR WINS` on the unescalated path, where the player may never
+  have seen the designation readout that introduces the name — a
+  pre-escalation result should resolve on the score alone.
+- **`hasSeenReveal` is persisted too early.** `presentationState.ts`'s
+  `onEscalation` fires at the Act 1→2 transition, so quitting or reloading
+  during Act 2 spends the single discovery on something never seen, with no
+  route back. It should be written when the dossier renders.
 
 ## Legacy reference
 
