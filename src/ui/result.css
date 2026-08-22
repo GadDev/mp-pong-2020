@@ -1,0 +1,24 @@
+/* Match-outcome beat. Act 1 typography over the dimmed board — the same
+   "the world paused" treatment as the pause overlay, since this is still the
+   match's own screen and not a separate place. */
+
+.result__verdict {
+  font-size: 32px;
+}
+
+/* MOODBOARD.md reserves these two exclusively for score feedback. A match
+   result is the terminal score feedback, so this is the one legitimate use
+   outside the live HUD digits. */
+.result__verdict--won {
+  color: #00ffa0;
+}
+
+.result__verdict--lost {
+  color: #ff2d2d;
+}
+
+.result__score {
+  font-size: 24px;
+  letter-spacing: 0.25em;
+  color: #c8c8c8;
+}

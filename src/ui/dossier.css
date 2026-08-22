@@ -1,0 +1,112 @@
+/* The climax screen. Act 3's amber/magenta interface language rather than the
+   Act 1 chrome the rest of `theme.css` covers — this is the dense HUD panel
+   resolving, not a menu. Copy register stays clinical; only the content is the
+   surprise (LORE.md / MOODBOARD.md: played straight). */
+
+.screen--dossier {
+  background-color: #1a1220;
+  background-image: none;
+  justify-content: center;
+  gap: 0;
+}
+
+.dossier__transition {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  color: #ffb020;
+  text-align: center;
+  transition:
+    top 1.2s ease,
+    opacity 1.2s ease;
+}
+
+.dossier__transition--settled {
+  top: 8%;
+  opacity: 0.55;
+}
+
+.dossier {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(620px, 88vw);
+  padding: 28px 32px;
+  border: 1px solid #ffb020;
+  background: rgba(10, 14, 20, 0.72);
+  opacity: 0;
+  transition: opacity 1.4s ease;
+  pointer-events: none;
+}
+
+.dossier--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dossier__heading {
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  color: #ff3d7a;
+}
+
+.dossier__name {
+  font-size: 26px;
+  letter-spacing: 0.18em;
+  color: #ffb020;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 176, 32, 0.35);
+}
+
+.dossier__row {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 16px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.dossier__key {
+  color: #c8c8c8;
+  letter-spacing: 0.16em;
+  opacity: 0.6;
+}
+
+.dossier__value {
+  color: #ffb020;
+  letter-spacing: 0.08em;
+  white-space: pre-line;
+}
+
+/* Framed as a channel the system is opening, per MOODBOARD.md — never styled
+   as a website-style button, even though it is the one actionable element. */
+.dossier__channel {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 61, 122, 0.4);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: #ff3d7a;
+  text-decoration: none;
+}
+
+.dossier__channel:hover,
+.dossier__channel:focus-visible {
+  outline: none;
+  color: #ffb020;
+}
+
+.dossier__dismiss {
+  align-self: flex-start;
+  margin-top: 18px;
+  font-size: 13px;
+  color: #c8c8c8;
+}
+
+.dossier__dismiss:hover,
+.dossier__dismiss:focus-visible {
+  border-bottom-color: #c8c8c8;
+}

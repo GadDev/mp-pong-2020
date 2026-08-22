@@ -16,11 +16,9 @@ import { CYAN, NEAR_WHITE, VOID_BLACK } from "../reveal/palette";
 export type PresenceLayout = "intro" | "menu";
 
 export interface Presence {
-  scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
   /** `speaking` brightens the edges while a voice fragment is on screen. */
   update(dt: number, speaking: boolean): void;
-  setViewport(width: number, height: number): void;
+  render(): void;
   /** Which overlay is on screen — decides how much room the text needs. */
   setLayout(kind: PresenceLayout): void;
   dispose(): void;
@@ -46,7 +44,7 @@ const MAX_TILT = 0.32; // rad — a lean, not a stare
 const QUIET_OPACITY = 0.42;
 const SPEAKING_OPACITY = 0.95;
 
-export function createPresence(): Presence {
+export function createPresence(container: HTMLElement): Presence {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(VOID_BLACK);
 
@@ -57,6 +55,15 @@ export function createPresence(): Presence {
     100,
   );
   camera.position.set(0, 0, 4.6);
+
+  // Its own context rather than the game's: `render/renderer.ts` owns the
+  // arena's WebGLRenderer privately, and the presence is pre-game chrome, not
+  // part of the scene graph that module is responsible for. The two canvases
+  // are never visible at the same time.
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  container.appendChild(renderer.domElement);
 
   // Parent leans toward the cursor, child spins — separated so the two
   // motions can't fight each other on the same Euler.
@@ -129,9 +136,14 @@ export function createPresence(): Presence {
   function setViewport(width: number, height: number): void {
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
     viewportHeight = height;
     applyLayout();
   }
+
+  const handleResize = (): void =>
+    setViewport(window.innerWidth, window.innerHeight);
+  window.addEventListener("resize", handleResize);
 
   function setLayout(kind: PresenceLayout): void {
     layoutKind = kind;
@@ -179,13 +191,16 @@ export function createPresence(): Presence {
   }
 
   return {
-    scene,
-    camera,
     update,
-    setViewport,
+    render(): void {
+      renderer.render(scene, camera);
+    },
     setLayout,
     dispose(): void {
+      window.removeEventListener("resize", handleResize);
       window.removeEventListener("pointermove", onPointerMove);
+      renderer.dispose();
+      renderer.domElement.remove();
       geometry.dispose();
       material.dispose();
       scene.clear();

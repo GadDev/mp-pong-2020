@@ -1,8 +1,10 @@
-// TECHSTACK.md: localStorage, two kinds of keys, nothing heavier. This file
-// owns the user-preferences half (volume, skip-intro). `hasSeenReveal`
-// arrives with Milestone 4, once there's a real reveal trigger to disarm.
+// TECHSTACK.md: localStorage, two kinds of keys, nothing heavier — the
+// user-preferences half (volume, skip-intro) plus the one piece of
+// progression state the design admits, `hasSeenReveal`. Mid-match state is
+// deliberately never persisted (ROADMAP.md M2: Continue is page-session only).
 const VOLUME_KEY = "mp-pong:volume";
 const SKIP_INTRO_KEY = "mp-pong:skipIntro";
+const HAS_SEEN_REVEAL_KEY = "mp-pong:hasSeenReveal";
 
 const DEFAULT_VOLUME = 0.7;
 
@@ -23,4 +25,19 @@ export function getSkipIntro(): boolean {
 
 export function setSkipIntro(skip: boolean): void {
   localStorage.setItem(SKIP_INTRO_KEY, String(skip));
+}
+
+/**
+ * ROADMAP.md M4: set the first time the escalation trigger fires, and checked
+ * by every subsequent New Game to decide whether escalation is armed at all.
+ * The reveal is discoverable exactly once per device and there is deliberately
+ * no player-facing route back — the dev-only `?debug=reveal` flag is the only
+ * override, and it is never surfaced in a menu.
+ */
+export function getHasSeenReveal(): boolean {
+  return localStorage.getItem(HAS_SEEN_REVEAL_KEY) === "true";
+}
+
+export function setHasSeenReveal(seen: boolean): void {
+  localStorage.setItem(HAS_SEEN_REVEAL_KEY, String(seen));
 }
