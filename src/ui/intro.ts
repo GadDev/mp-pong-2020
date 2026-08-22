@@ -1,4 +1,5 @@
 import "./theme.css";
+import { GAME_TITLE } from "./title";
 
 export interface IntroScreenOptions {
   onSkip: () => void;
@@ -11,14 +12,11 @@ export interface IntroScreenOptions {
  */
 export function createIntroScreen({ onSkip }: IntroScreenOptions): HTMLElement {
   const root = document.createElement("div");
-  root.className = "screen";
-  root.style.backgroundImage = "none";
+  root.className = "screen screen--void";
 
   const title = document.createElement("div");
-  title.className = "screen__title";
-  title.textContent = "PONG";
-  title.style.opacity = "0";
-  title.style.transition = "opacity 1.2s ease";
+  title.className = "screen__title screen__title--intro";
+  title.textContent = GAME_TITLE;
 
   const hint = document.createElement("div");
   hint.className = "screen__hint";
@@ -27,7 +25,7 @@ export function createIntroScreen({ onSkip }: IntroScreenOptions): HTMLElement {
   root.append(title, hint);
 
   requestAnimationFrame(() => {
-    title.style.opacity = "1";
+    title.classList.add("screen__title--shown");
   });
 
   const skipDelayTimer = setTimeout(() => {

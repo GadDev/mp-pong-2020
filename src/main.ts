@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import "./style.css";
 import { buildRevealScene } from "./reveal/scene";
-import { updateRevealCamera } from "./reveal/camera";
+import { isWatcherCut, updateRevealCamera } from "./reveal/camera";
+import { createRevealComposer } from "./reveal/postprocessing";
+import { FrameRateProbe } from "./reveal/framerate";
 import { RevealHud } from "./reveal/hud";
 import { RevealAudio } from "./reveal/audio";
 import { Act, RevealTimeline } from "./reveal/timeline";
@@ -29,9 +31,23 @@ const camera = new THREE.PerspectiveCamera(
   100,
 );
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+// Milestone 5: `antialias` is now redundant — EffectComposer renders into its
+// own targets, so the WebGLRenderer's MSAA never applies to what reaches the
+// screen. Dropped rather than left in as a misleading no-op that costs a
+// context attribute; the film grain and bloom hide edge aliasing well enough
+// on a wireframe-heavy scene that a dedicated SMAA pass would blow the
+// two-pass budget for very little.
+const renderer = new THREE.WebGLRenderer();
+// Capped at 2: post-processing cost scales with the square of this number,
+// and it's the single biggest lever on the "stable frame rate on a mid-range
+// laptop GPU" done-condition.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 gameLayer.appendChild(renderer.domElement);
+
+const composer = createRevealComposer(renderer, scene, camera);
+const frameRate = new FrameRateProbe();
+frameRate.attachReadout(gameLayer);
 
 const hud = new RevealHud(gameLayer);
 const audio = new RevealAudio();
@@ -42,6 +58,10 @@ window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // The composer owns its own render targets — without this they keep the
+  // old dimensions and the canvas renders blurry (and stretched) after a
+  // resize, with no error to point at.
+  composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 type Screen = "intro" | "menu" | "options" | "playing" | "paused";
@@ -194,9 +214,11 @@ function animate(): void {
     updateRevealCamera(camera, act, elapsedInAct, now);
     hud.update(act, elapsedInAct);
     audio.update(act, elapsedInAct, now);
+    composer.update(act, isWatcherCut(act, elapsedInAct));
+    frameRate.sample(act);
   }
 
-  renderer.render(scene, camera);
+  composer.render();
 }
 
 animate();

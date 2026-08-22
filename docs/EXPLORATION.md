@@ -16,17 +16,29 @@
 
 ## 1. The title
 
+> **Status: `EXCHANGE` is being trialled in the code** — the two DOM title
+> marks and `index.html`'s `<title>`/`og:title` now read `EXCHANGE`. The
+> question below is still **open**: nothing moved into `MOODBOARD.md` as
+> spec, and no losing candidate moved into `BACKLOG.md`'s "rejected, with
+> reasoning." Reverting is one constant and two HTML attributes.
+
 ### What the repo name is vs. what the game is called
 
 `mp-pong-2020` stays the repo name — it's baked into
 `vite.config.ts`'s `base` and therefore into the Pages URL, and renaming it
-buys nothing. The **game title** is a separate string. If one is chosen,
-the touch list is exactly four places:
+buys nothing. The **game title** is a separate string, and it now lives in
+one place: `src/ui/title.ts`'s `GAME_TITLE`. The touch list is five sites,
+two of which can import that constant and three of which can't:
 
-- `index.html` → `<title>` (currently `MP Pong`)
-- `src/ui/intro.ts` → hardcoded `"PONG"`
-- `src/ui/mainMenu.ts` → hardcoded `"PONG"`
-- `README.md` H1 and `package.json` `description`
+- `src/ui/title.ts` → `GAME_TITLE` — the single source for the two DOM marks
+- `src/ui/intro.ts` → reads `GAME_TITLE`
+- `src/ui/mainMenu.ts` → reads `GAME_TITLE`
+- `index.html` → `<title>` **and** `og:title` (both `EXCHANGE`)
+- `README.md` H1 and `package.json` `description` → **deliberately still
+  `MP PONG 2020` / "Pong".** These are the repo's outward face and are doing
+  the same disguise work the constraints below are built around —
+  `MISSION.md` opens "This is Pong. It looks like Pong." They move only when
+  the title stops being a trial.
 
 ### The test a candidate has to pass
 
@@ -58,6 +70,8 @@ Not "is it cool." Four constraints, in priority order:
 | **VOLLEY** | Pure Pong. The most cabinet-authentic word on the list. | A volley *of questions* — an interrogation exchange, which is precisely the Voight-Kampff register `MOODBOARD.md` cites for the Act 3 HUD. Also military. | **Strong runner-up.** Better disguise than RALLY, slightly weaker flip. |
 | **RETURN** | Returning the ball. Also a key on the keyboard the player is touching — quietly diegetic. | A *reply*. Sits directly on `LORE.md`'s canonical "response cycles" relabeling. | Dark horse. Plainest of the three, which is either the point or too plain. |
 | **SERVE** | Serving the ball. | *Service* — as in employment, as in being of use to someone. Cold. | Good flip, but "serve" reads slightly submissive for a title. |
+| **EXCHANGE** | "An exchange" is genuine racket-sport vocabulary. Also *telephone exchange* — period-correct switching hardware. | A two-way exchange, i.e. a conversation. The whole pre-reveal premise is that this is one-way (you versus logic); the climax is the moment it turns out to have had two parties the entire time. | **Contender.** Best flip on the list and the only candidate with no vocabulary collision — see below. Weakest disguise of the serious four. |
+| **CONNECT** | Not Pong vocabulary — you don't *connect* in Pong. Reads as online multiplayer, or as `Connect Four`. | Human connection / an open channel. | Rejected — see below. Collides with `LORE.md`'s "channel," and has no innocent first reading to flip *from*. |
 | **DEREZZ** | Authentic Tron vocabulary; instantly signals the aesthetic. | Nothing. It's a costume. | Rejected — fails constraint 1. |
 | **PATTERN** | Odd for a cabinet. | On the nose: `LORE.md`'s measured trait is literally "pattern-adaptation." | Rejected — brushes constraint 2. |
 
@@ -78,10 +92,60 @@ it; the design's "inevitable in hindsight" thesis leans hard for it.
 This is the actual decision, and it's a taste call, not a derivable one.
 `VOLLEY` has no such collision at all.
 
-**Recommendation: `RALLY`,** if you read the redaction as the payoff. One
-word, tab-safe, indistinguishable from a 1982 cabinet, and the second
-meaning is already load-bearing in `MOODBOARD.md`. **`VOLLEY`** if the
-camouflage and the clean Act 3 read matter more than the flip.
+**Recommendation: `RALLY`** — *contested, see EXCHANGE below* — if you read
+the redaction as the payoff. One word, tab-safe, indistinguishable from a
+1982 cabinet, and the second meaning is already load-bearing in
+`MOODBOARD.md`. **`VOLLEY`** if the camouflage and the clean Act 3 read
+matter more than the flip.
+
+### EXCHANGE vs CONNECT
+
+Both dodge the RALLY objection entirely — neither is a word the Act 3 HUD
+retires — but they don't fare equally, and the test that separates them is
+the one RALLY forced into existence: **does the title collide with
+vocabulary `LORE.md` sanctions for Act 3?**
+
+**CONNECT collides.** `LORE.md`'s climax frames the dossier link as "a
+*channel* or *signal* the system is opening." `CONNECT` is a synonym for
+precisely that, arriving precisely when the HUD needs to be legible — the
+same class of objection as RALLY's, not a lesser one. Worse, it fails
+constraint 1 from the other side: a flip needs a strong *innocent* reading
+to flip away from, and nobody connects anything in Pong. With no first
+meaning, `CONNECT` lands on its second immediately — it asks "connect to
+what?" before the player has pressed Start, which is a soft constraint-2
+breach. Practical objection on top: one-word `CONNECT` on a Pong game reads
+as online multiplayer, in a game that has none, and the repo being
+`mp-pong-2020` makes that misread likelier rather than less.
+
+**EXCHANGE doesn't collide** with anything in the sanctioned set (response
+cycles, adaptation index, threat assessments, designation, channel, signal,
+feed, observation). And it has the cleanest innocent reading available
+after VOLLEY — "an exchange" is real racket-sport usage — so there is
+something to flip. The flip itself is the strongest on the list: the game's
+premise is a one-way relationship (a subject versus logic) and the climax
+discloses that it was two-way all along. That is the thesis of the whole
+design compressed into one word. It also sits in the *recruitment* register
+`MOODBOARD.md` reserves amber for, where VOLLEY's "volley of questions"
+reads adversarial — an exchange is between equals, which is what Act 3 is
+actually offering.
+
+Where EXCHANGE loses, plainly:
+
+- **Constraint 3, its real weakness.** It's a worse 1982 cabinet word than
+  VOLLEY and much worse than PONG; the stock-exchange echo is genuine. Its
+  only counterweight is *telephone exchange* — period-correct switching
+  hardware whose entire function is connecting two parties. That reading
+  has to carry the disguise on its own, and it may be too oblique to.
+- **Constraint 4.** Eight characters against the current four. At
+  `theme.css`'s title mark (48 px, `0.35em` tracking) `PONG` measures
+  roughly 180 px and `EXCHANGE` roughly 360 px — fine on desktop, tight on
+  a 375 px viewport, and tighter still once a stylized display font
+  replaces the monospace. Either the mark shrinks or the tracking does.
+
+**Verdict: EXCHANGE is a real contender and CONNECT isn't.** Ranked on the
+constraints as written, EXCHANGE wins constraint 1 outright, ties on 2,
+loses 3 to VOLLEY, and pays a small cost on 4. Whether that trade is worth
+taking is the same open question the doc already names below.
 
 One consequence worth naming: the on-screen title mark currently says
 `PONG`, which is doing real work — it's the plainest possible promise, and

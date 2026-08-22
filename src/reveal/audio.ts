@@ -1,10 +1,27 @@
 import { Act } from "./timeline";
 
+/** Act 2 stutter shape, in seconds — independent of frame rate. */
+const STUTTER_PERIOD_SECONDS = 3.1;
+const STUTTER_ATTACK_SECONDS = 0.02;
+const STUTTER_DURATION_SECONDS = 0.09;
+const ACT_TWO_PAD_GAIN = 0.06;
+const ACT_TWO_STUTTER_GAIN = 0.008;
+
 /**
  * Procedural placeholder only. TECHSTACK.md commits to Howler.js for real
  * sample playback/crossfading in Milestone 5 — there are no produced audio
  * assets yet, so this spike proves the *pacing* of the audio crossfade with
  * raw Web Audio oscillators, not the final sound.
+ *
+ * **Milestone 5 status: the Howler swap is asset-blocked, not forgotten.**
+ * Howler's value per TECHSTACK.md is sample loading, sprite SFX, crossfading
+ * and mobile autoplay-unlock — all of which need audio files that do not
+ * exist yet. Installing the dependency now would add a package that plays
+ * silence and cannot be verified. What Milestone 5 *can* do, and has done, is
+ * keep this class's public surface (`resume`, `setMasterVolume`, `setActive`,
+ * `update`, `playBlip`) exactly the shape a Howler-backed implementation
+ * would satisfy, so the swap is a file replacement rather than a refactor of
+ * every caller.
  */
 export class RevealAudio {
   private readonly context: AudioContext;
@@ -14,6 +31,8 @@ export class RevealAudio {
   private readonly pad: OscillatorNode;
   private readonly padSub: OscillatorNode;
   private active = true;
+  private lastStutterPhase = 0;
+  private lastAct: Act | null = null;
 
   constructor() {
     this.context = new AudioContext();
@@ -70,6 +89,16 @@ export class RevealAudio {
     if (!this.active) return;
     const t = this.context.currentTime;
 
+    // Entering an act (including a debug jump) clears any stutter ramp still
+    // scheduled and rewinds the phase tracker, so a stale phase from a
+    // previous pass through Act 2 can't read as an immediate crossing.
+    if (act !== this.lastAct) {
+      this.lastAct = act;
+      this.lastStutterPhase = 0;
+      this.padGain.gain.cancelScheduledValues(t);
+      this.padGain.gain.setValueAtTime(this.padGain.gain.value, t);
+    }
+
     if (act === Act.ONE) {
       this.padGain.gain.setTargetAtTime(0.02, t, 0.5);
       this.padFilter.frequency.setTargetAtTime(400, t, 0.5);
@@ -78,9 +107,31 @@ export class RevealAudio {
 
     if (act === Act.TWO) {
       // Subtle degradation: a faint stutter, mirroring the HUD glitches.
-      const stutterWindow = elapsedInAct % 3.1;
-      const isStuttering = stutterWindow > 3.0 && stutterWindow < 3.05;
-      this.padGain.gain.setTargetAtTime(isStuttering ? 0.01 : 0.06, t, 0.8);
+      //
+      // Edge-detected and scheduled on the audio clock, for the same reason
+      // the HUD flicker is frame-counted: the previous version tested a fixed
+      // ~50 ms window once per frame, so the dip's length tracked the display
+      // refresh rate and a dropped frame skipped it outright. Ramps are now
+      // written into the AudioParam timeline, which runs at the sample rate
+      // and doesn't care how often update() is called.
+      const phase = elapsedInAct % STUTTER_PERIOD_SECONDS;
+      if (phase < this.lastStutterPhase) {
+        this.padGain.gain.cancelScheduledValues(t);
+        this.padGain.gain.setValueAtTime(ACT_TWO_PAD_GAIN, t);
+        this.padGain.gain.linearRampToValueAtTime(
+          ACT_TWO_STUTTER_GAIN,
+          t + STUTTER_ATTACK_SECONDS,
+        );
+        this.padGain.gain.linearRampToValueAtTime(
+          ACT_TWO_PAD_GAIN,
+          t + STUTTER_DURATION_SECONDS,
+        );
+      } else if (this.lastStutterPhase === 0) {
+        // First frame of the act: establish the level without a ramp fight.
+        this.padGain.gain.setTargetAtTime(ACT_TWO_PAD_GAIN, t, 0.8);
+      }
+      this.lastStutterPhase = phase;
+
       this.padFilter.frequency.setTargetAtTime(600, t, 1.5);
       return;
     }

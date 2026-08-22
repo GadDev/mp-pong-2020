@@ -38,8 +38,11 @@ export function buildRevealScene(): RevealScene {
   ball.position.set(0, 0.6, 0);
   scene.add(ball);
 
-  const ambient = new THREE.AmbientLight(NEAR_WHITE, 0.6);
-  scene.add(ambient);
-
+  // No lights. Every material here is MeshBasicMaterial, which is unlit by
+  // design — the previous AmbientLight was a no-op. This is also the right
+  // answer for Milestone 5's bloom: TECHSTACK.md asks for the glow to come
+  // from emissive material values and threshold tuning rather than extra
+  // passes, and with unlit materials the color *is* the emitted value, so
+  // UnrealBloomPass's threshold reads directly against the palette hexes.
   return { scene, ball, paddleLeft, paddleRight, grid };
 }

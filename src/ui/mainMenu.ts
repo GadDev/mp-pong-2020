@@ -1,4 +1,5 @@
 import "./theme.css";
+import { GAME_TITLE } from "./title";
 
 export interface MainMenuOptions {
   canContinue: boolean;
@@ -23,7 +24,7 @@ export function createMainMenu({
 
   const title = document.createElement("div");
   title.className = "screen__title";
-  title.textContent = "PONG";
+  title.textContent = GAME_TITLE;
 
   const list = document.createElement("div");
   list.className = "menu-list";
@@ -46,6 +47,15 @@ export function createMainMenu({
 
   list.append(newGame, continueGame, options);
   root.append(title, list);
+
+  // The focus underline is the menu's only affordance (MOODBOARD.md: no
+  // boxes, no panels), so something must be focused for the screen to read as
+  // interactive at all. Focus lands on the first *enabled* item — Continue is
+  // disabled on a fresh load, and focusing a disabled control shows no
+  // underline, which would look like a dead screen.
+  requestAnimationFrame(() => {
+    (canContinue ? continueGame : newGame).focus();
+  });
 
   return root;
 }

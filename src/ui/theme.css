@@ -2,6 +2,19 @@
    entirely from the Act 1 palette/typography, deliberately plain, no boxes
    or panels beyond a thin focus underline. */
 
+/* MOODBOARD.md Typography: "a geometric or monospace sans with a slight
+   technical/military feel." A system-monospace stack rather than a webfont —
+   the chrome must render identically on a cold cache, and a FOUT on the very
+   first screen a player sees would undercut the "still, unremarkable"
+   premise more than any typeface choice buys back. */
+:root {
+  --chrome-font: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono",
+    "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --void-black: #0a0e14;
+  --cyan: #00f0ff;
+  --neutral-gray: #c8c8c8;
+}
+
 .screen {
   position: fixed;
   inset: 0;
@@ -10,27 +23,49 @@
   align-items: center;
   justify-content: center;
   gap: 28px;
-  background-color: #0a0e14;
+  background-color: var(--void-black);
   background-image: linear-gradient(
       rgba(0, 240, 255, 0.06) 1px,
       transparent 1px
     ),
     linear-gradient(90deg, rgba(0, 240, 255, 0.06) 1px, transparent 1px);
   background-size: 48px 48px;
-  font-family: "Courier New", monospace;
-  color: #c8c8c8;
+  font-family: var(--chrome-font);
+  color: var(--neutral-gray);
   z-index: 20;
+  /* MOODBOARD.md: "a very slow, barely-perceptible line-scroll — stillness is
+     the point." 48px (one grid cell) over 24s, so the grid never appears to
+     jump; it should read as the screen breathing, not as an animation. */
+  animation: screen-line-scroll 24s linear infinite;
+}
+
+@keyframes screen-line-scroll {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 48px;
+  }
 }
 
 /* Pause: the game scene stays visible but dimmed, not replaced. */
 .screen--scrim {
   background-color: rgba(10, 14, 20, 0.75);
   background-image: none;
+  /* Nothing to scroll once the grid image is gone — leaving the animation
+     running would keep compositing the layer every frame on top of a live
+     WebGL canvas for zero visible effect. */
+  animation: none;
 }
 
 .screen__title {
-  font-size: 48px;
+  /* Clamped, not fixed: an 8-character mark at 48px/0.35em overflows a
+     narrow viewport, and a single word will not wrap. Identical to the
+     previous fixed 48px from ~533px wide up. */
+  font-size: clamp(28px, 9vw, 48px);
   letter-spacing: 0.35em;
+  /* Cancel the trailing letter-space so the centred mark sits on-axis. */
+  margin-right: -0.35em;
   color: #00f0ff;
   text-transform: uppercase;
 }
@@ -69,10 +104,15 @@
   text-transform: uppercase;
 }
 
+/* `:focus`, not only `:focus-visible` — the menu focuses its first enabled
+   item on mount, and programmatic focus does not match :focus-visible unless
+   the last input was a keypress. Without this the screen can render with
+   nothing underlined and read as inert. */
+.menu-item:focus,
 .menu-item:focus-visible,
 .menu-item:hover {
   outline: none;
-  border-bottom-color: #00f0ff;
+  border-bottom-color: var(--cyan);
 }
 
 .menu-item:disabled {
@@ -98,4 +138,41 @@
   accent-color: #00f0ff;
   width: 16px;
   height: 16px;
+}
+
+/* Intro: MOODBOARD.md specifies "a few seconds of void black ... no grid yet,
+   nothing that telegraphs Act 1's arena." A class rather than an inline style
+   so the scroll animation is switched off with the image it animates. */
+.screen--void {
+  background-image: none;
+  animation: none;
+}
+
+.screen__title--intro {
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+.screen__title--intro.screen__title--shown {
+  opacity: 1;
+}
+
+/* Milestone 5 accessibility path (BACKLOG.md). The JS side of this lives in
+   src/motion.ts and damps the camera drift, HUD flicker and chromatic
+   aberration; this block covers the DOM chrome, which the composer never
+   touches. Everything here is texture, so all of it can simply stop —
+   no information is carried by the scroll or the fades. */
+@media (prefers-reduced-motion: reduce) {
+  .screen {
+    animation: none;
+  }
+
+  .screen__hint,
+  .screen__title--intro {
+    transition: none;
+  }
+
+  .screen__title--intro {
+    opacity: 1;
+  }
 }

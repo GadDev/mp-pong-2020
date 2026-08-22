@@ -43,8 +43,18 @@ Milestone 0 is done. `src/reveal/` is the Milestone 1 spike — the Act I → II
 Milestone 2 (intro / menu / pause shell) is in progress on top of it —
 `src/ui/` and `src/persistence.ts`.
 
+**Parts of Milestone 5 have also landed early, out of roadmap order** — the
+parts that don't depend on gameplay existing: the `EffectComposer` stack, the
+`prefers-reduced-motion` path, and the menu-chrome visual finish. The rest of
+M5 (final audio assets, the act-by-act texture match "end to end", Act 3
+dossier styling) is genuinely blocked on Milestones 3/4. The reduced-motion
+flag was pulled forward deliberately, on `BACKLOG.md`'s reasoning that it is
+cheap to design in during M5 and expensive to retrofit once every effect is
+hand-tuned.
+
 ```
 src/main.ts           # wiring + debug keys + rAF loop
+src/motion.ts         # prefers-reduced-motion flag (live, not read-once)
 src/persistence.ts    # localStorage prefs (volume, skip-intro); hasSeenReveal lands in M4
 src/ui/               # M2 DOM-overlay chrome: intro, mainMenu, options, pause, theme.css
 src/reveal/
@@ -52,6 +62,8 @@ src/reveal/
   camera.ts           # per-act camera behaviour on one shared PerspectiveCamera
   hud.ts / hud.css    # DOM-overlay HUD that degrades across acts
   audio.ts            # procedural Web Audio placeholder
+  postprocessing.ts   # M5 composer: bloom + film grain + gated chromatic aberration
+  framerate.ts        # per-act frame-time probe; inert unless import.meta.env.DEV
   scene.ts            # dummy court: grid, two blocks, a sphere
   palette.ts          # MOODBOARD.md hex tokens
 ```
@@ -109,19 +121,34 @@ Two independent workflows on push to `main`:
 
 Real, small, worth fixing when touched — not blockers:
 
-- **Pause doesn't freeze the act clock.** `RevealTimeline.elapsed()` is
-  `nowSeconds - actEnteredAt` against wall time, and `pauseGame()` in
-  `main.ts` only stops calling `tickAutoplay` — the clock keeps running.
-  Pausing for 30 s advances the reveal 30 s; quitting to menu and hitting
-  Continue does the same. This misses `ROADMAP.md` M2's "freezes the game
-  loop" done-condition and needs an accumulated pause offset or a
-  delta-driven timeline (same fix family as the delta-time item).
-- **`ui/intro.ts` never auto-advances.** `MOODBOARD.md` specifies "a few
-  seconds of void black"; a player who presses nothing waits forever.
-- **`scene.ts` adds an `AmbientLight` that does nothing.** Every material in the scene is `MeshBasicMaterial`, which is unlit by design. Either drop the light or move to a material that responds to it.
-- **The Act 2 HUD flicker and audio stutter are frame-rate dependent.** Both use a fixed ~50 ms window tested once per frame (`flickerWindow > 2.3 && < 2.35`, `stutterWindow > 3.0 && < 3.05`). Duration therefore varies with refresh rate, and `MOODBOARD.md` specifies a *single-frame* flicker. This is the same class of bug as the delta-time issue `BACKLOG.md` flags for Milestone 3 — fix both together with an explicit frame-or-duration-based trigger.
-- **No `prefers-reduced-motion` path.** Now that strobing HUD corruption and camera drift are real code, this is a live photosensitivity concern rather than a hypothetical one. `BACKLOG.md` recommends promoting it into Milestone 5.
-- **No geometry/material disposal anywhere.** Harmless while nothing is torn down; becomes a leak the moment acts start rebuilding scene contents.
+- **No scene-graph disposal.** The composer disposes its own render targets
+  (`postprocessing.ts`), but no geometry or material is ever disposed.
+  Harmless while nothing is torn down; becomes a leak the moment acts start
+  rebuilding scene contents.
+- **Delta-time-based physics is still open** (`BACKLOG.md` → Milestone 3).
+  Note that the Act 2 HUD flicker and audio stutter were the *other half* of
+  this same bug class — a fixed ~50 ms window tested once per frame — and
+  they've now been fixed by edge-detecting the period crossing and counting
+  duration in frames (`hud.ts`) or on the audio clock (`audio.ts`). Follow
+  that precedent when the ball physics land; don't reintroduce
+  once-per-frame time windows.
+- **Audio is still procedural Web Audio, not Howler.js.** Blocked on there
+  being no produced audio assets to load; `RevealAudio`'s public surface is
+  deliberately Howler-shaped so the swap stays a file replacement. See the
+  header comment in `reveal/audio.ts`.
+- **Frame rate is unverified on the target hardware.** The M5 done-condition
+  names a *mid-range laptop GPU*. What's actually been measured is 120 fps
+  with a ~10 ms p95 in all three acts at 1280×713 CSS px, DPR capped at 2, on
+  an Apple Silicon Mac — i.e. a machine with a lot of headroom. Re-measure
+  before calling the done-condition met; `reveal/framerate.ts` prints the
+  numbers in dev.
+
+**Resolved, for anyone diffing against an older copy of this list:** the
+wall-clock pause bug and `ui/intro.ts`'s missing auto-advance were both fixed
+by the in-flight Milestone 2 work (`playedSeconds` in `main.ts`, the 4.5 s
+`autoAdvanceTimer` in `intro.ts`), not by the Milestone 5 pass. The Act 2
+flicker/stutter timing, `scene.ts`'s no-op `AmbientLight`, and the missing
+`prefers-reduced-motion` path (now `src/motion.ts`) were fixed by Milestone 5.
 
 ## Legacy reference
 

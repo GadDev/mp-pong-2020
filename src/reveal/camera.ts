@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Act, AUTOPLAY_ACT_DURATION } from "./timeline";
+import { motionScale, prefersReducedMotion } from "../motion";
 
 // Act 1: fixed low Tron-style shot, looking down the length of the court.
 const ACT_ONE_POSITION = new THREE.Vector3(0, 1.1, 6.5);
@@ -22,6 +23,22 @@ const WATCHER_HOLD_SECONDS = 0.4;
 
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+}
+
+/**
+ * Whether the Act 3 "watcher" jump-cut is showing on this frame.
+ *
+ * Exported because Milestone 5's chromatic-aberration pass is scoped to
+ * exactly this cut and nothing else. Both the camera and the composer ask the
+ * same function rather than each re-deriving the window from `elapsedInAct` —
+ * two copies of this arithmetic would drift apart, and the failure mode is
+ * silent (aberration bleeding onto the orbital shot, which is precisely the
+ * "permanently-on filter" TECHSTACK.md rules out).
+ */
+export function isWatcherCut(act: Act, elapsedInAct: number): boolean {
+  if (act !== Act.THREE) return false;
+  const cyclePosition = elapsedInAct % WATCHER_PERIOD_SECONDS;
+  return elapsedInAct > 1 && cyclePosition < WATCHER_HOLD_SECONDS;
 }
 
 /**
@@ -56,7 +73,9 @@ export function updateRevealCamera(
 
     // Handheld-style micro-drift: a few pixels of sway, introduced gradually
     // as the operator/observer presence becomes felt, never full shake.
-    const driftAmount = 0.03 * eased;
+    // Zeroed under reduced motion — the pull-back survives (it's the reveal),
+    // the sway doesn't (it's texture).
+    const driftAmount = motionScale(0.03 * eased);
     position.x += Math.sin(nowSeconds * 0.7) * driftAmount;
     position.y += Math.sin(nowSeconds * 0.9 + 1.3) * driftAmount * 0.6;
 
@@ -66,14 +85,19 @@ export function updateRevealCamera(
   }
 
   // Act 3: check for the watcher cut first — a hard, deliberate jump-cut.
-  const cyclePosition = elapsedInAct % WATCHER_PERIOD_SECONDS;
-  if (elapsedInAct > 1 && cyclePosition < WATCHER_HOLD_SECONDS) {
+  if (isWatcherCut(act, elapsedInAct)) {
     camera.position.copy(WATCHER_POSITION);
     camera.lookAt(WATCHER_LOOKAT);
     return;
   }
 
-  const angle = elapsedInAct * ACT_THREE_ANGULAR_SPEED;
+  // Reduced motion holds the orbit still at its opening angle rather than
+  // drifting continuously. The Act 3 vantage — high, outside, looking down —
+  // is what communicates the change of perspective; the fact that it's
+  // *moving* is the part that provokes.
+  const angle = prefersReducedMotion()
+    ? 0
+    : elapsedInAct * ACT_THREE_ANGULAR_SPEED;
   camera.position.set(
     Math.sin(angle) * ACT_THREE_RADIUS,
     ACT_THREE_HEIGHT,
