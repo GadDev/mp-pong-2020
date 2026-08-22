@@ -1,17 +1,27 @@
-import * as THREE from "three";
 import "./style.css";
-import { buildRevealScene } from "./reveal/scene";
-import { isWatcherCut, updateRevealCamera } from "./reveal/camera";
-import { createRevealComposer } from "./reveal/postprocessing";
-import { FrameRateProbe } from "./reveal/framerate";
-import { RevealHud } from "./reveal/hud";
+import {
+  createGameState,
+  setPlayerPaddleX,
+  stepGame,
+  type GameState,
+} from "./game/gameState";
+import { Act, PresentationState } from "./game/presentationState";
+import { Renderer } from "./render/renderer";
 import { RevealAudio } from "./reveal/audio";
-import { Act, RevealTimeline } from "./reveal/timeline";
 import { createIntroScreen } from "./ui/intro";
 import { createMainMenu } from "./ui/mainMenu";
 import { createOptionsScreen } from "./ui/options";
 import { createPauseOverlay } from "./ui/pause";
-import { getSkipIntro, getVolume, setSkipIntro, setVolume } from "./persistence";
+import { createDossierScreen } from "./ui/dossier";
+import { createResultScreen } from "./ui/result";
+import {
+  getHasSeenReveal,
+  getSkipIntro,
+  getVolume,
+  setHasSeenReveal,
+  setSkipIntro,
+  setVolume,
+} from "./persistence";
 
 const appElement = document.querySelector<HTMLDivElement>("#app");
 if (!appElement) {
@@ -22,87 +32,50 @@ const app: HTMLDivElement = appElement;
 const gameLayer = document.createElement("div");
 app.appendChild(gameLayer);
 
-const { scene, ball } = buildRevealScene();
+/**
+ * BACKLOG.md requires a dev-only reveal re-trigger as Milestone 4 scope, not a
+ * nice-to-have: `hasSeenReveal` permanently disarms the escalation, so without
+ * this there is no way to demo the payoff on a device that has seen it once
+ * short of clearing site data. Read once, deliberately not surfaced anywhere in
+ * the menu — the interface must have no memory a player can go looking for.
+ */
+const debugReveal =
+  new URLSearchParams(window.location.search).get("debug") === "reveal";
 
-const camera = new THREE.PerspectiveCamera(
-  60,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  100,
-);
-
-// Milestone 5: `antialias` is now redundant — EffectComposer renders into its
-// own targets, so the WebGLRenderer's MSAA never applies to what reaches the
-// screen. Dropped rather than left in as a misleading no-op that costs a
-// context attribute; the film grain and bloom hide edge aliasing well enough
-// on a wireframe-heavy scene that a dedicated SMAA pass would blow the
-// two-pass budget for very little.
-const renderer = new THREE.WebGLRenderer();
-// Capped at 2: post-processing cost scales with the square of this number,
-// and it's the single biggest lever on the "stable frame rate on a mid-range
-// laptop GPU" done-condition.
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-gameLayer.appendChild(renderer.domElement);
-
-const composer = createRevealComposer(renderer, scene, camera);
-const frameRate = new FrameRateProbe();
-frameRate.attachReadout(gameLayer);
-
-const hud = new RevealHud(gameLayer);
+const renderer = new Renderer(gameLayer);
 const audio = new RevealAudio();
-const timeline = new RevealTimeline();
 audio.setMasterVolume(getVolume());
 
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  // The composer owns its own render targets — without this they keep the
-  // old dimensions and the canvas renders blurry (and stretched) after a
-  // resize, with no error to point at.
-  composer.setSize(window.innerWidth, window.innerHeight);
+let state: GameState = createGameState();
+const presentation = new PresentationState({
+  escalationArmed: debugReveal || !getHasSeenReveal(),
+  onEscalation: () => setHasSeenReveal(true),
 });
 
-type Screen = "intro" | "menu" | "options" | "playing" | "paused";
-
-// A clock that only advances while actually playing — RevealTimeline's
-// autoplay schedule compares against this, not wall-clock time, so pausing
-// (or sitting in the menu after a quit) doesn't cause it to "catch up" and
-// jump acts the moment play resumes.
-let playedSeconds = 0;
-let lastPlayingTimestamp: number | null = null;
-
-function tickGameClock(isPlaying: boolean): number {
-  const raw = performance.now() / 1000;
-  if (isPlaying) {
-    if (lastPlayingTimestamp !== null) {
-      playedSeconds += raw - lastPlayingTimestamp;
-    }
-    lastPlayingTimestamp = raw;
-  } else {
-    lastPlayingTimestamp = null;
-  }
-  return playedSeconds;
-}
-
-function resetGameClock(): void {
-  playedSeconds = 0;
-  lastPlayingTimestamp = null;
-}
+type Screen =
+  | "intro"
+  | "menu"
+  | "options"
+  | "playing"
+  | "paused"
+  | "result"
+  | "dossier";
 
 let currentScreen: Screen = getSkipIntro() ? "menu" : "intro";
 let overlay: HTMLElement | null = null;
-// Milestone 2 (ROADMAP.md): Continue is in-memory only, never persisted —
-// true once a match has started, so quitting to menu from pause re-offers it.
+// ROADMAP.md M2: Continue is in-memory only, never persisted — true once a
+// match has started, so quitting to menu from pause re-offers it.
 let hasActiveMatch = false;
+/** Drives the camera's micro-drift and the Act 3 audio LFO; only advances while playing. */
+let playedSeconds = 0;
 
 function showScreen(screen: Screen): void {
   currentScreen = screen;
   overlay?.remove();
   overlay = null;
 
-  const gameVisible = screen === "playing" || screen === "paused";
+  const gameVisible =
+    screen === "playing" || screen === "paused" || screen === "result";
   gameLayer.style.display = gameVisible ? "block" : "none";
 
   if (screen === "intro") {
@@ -129,9 +102,18 @@ function showScreen(screen: Screen): void {
   } else if (screen === "paused") {
     overlay = createPauseOverlay({
       onResume: resumeGame,
-      onRestart: restartGame,
+      onRestart: startNewGame,
       onQuitToMenu: quitToMenu,
     });
+  } else if (screen === "result") {
+    overlay = createResultScreen({
+      playerScore: state.playerScore,
+      operatorScore: state.operatorScore,
+      won: state.winner === "player",
+      onDismiss: quitToMenu,
+    });
+  } else if (screen === "dossier") {
+    overlay = createDossierScreen({ onDismiss: quitToMenu });
   }
 
   if (overlay) app.appendChild(overlay);
@@ -139,30 +121,34 @@ function showScreen(screen: Screen): void {
 
 function startNewGame(): void {
   hasActiveMatch = true;
-  resetGameClock();
-  timeline.startAutoplay(0);
+  playedSeconds = 0;
+  state = createGameState();
+  presentation.reset();
+  // Re-evaluated per match, not fixed at construction: the previous match may
+  // have just set `hasSeenReveal`, and ROADMAP.md M4 requires every subsequent
+  // New Game to check it.
+  presentation.setEscalationArmed(debugReveal || !getHasSeenReveal());
+  state.paused = false;
   audio.setActive(true);
   showScreen("playing");
 }
 
 function continueGame(): void {
+  state.paused = false;
   audio.setActive(true);
   showScreen("playing");
 }
 
 function pauseGame(): void {
+  // The physics gate lives in game state; the act clock is dt-driven, so
+  // skipping the presentation update freezes the reveal too.
+  state.paused = true;
   audio.setActive(false);
   showScreen("paused");
 }
 
 function resumeGame(): void {
-  audio.setActive(true);
-  showScreen("playing");
-}
-
-function restartGame(): void {
-  resetGameClock();
-  timeline.startAutoplay(0);
+  state.paused = false;
   audio.setActive(true);
   showScreen("playing");
 }
@@ -172,8 +158,13 @@ function quitToMenu(): void {
   showScreen("menu");
 }
 
-// Milestone 1 debug controls, gated to when a match is actually on screen —
-// see LORE.md's "discoverable once" rule; never exposed via the menu.
+// Input → game state. Screen-space X, mapped by the renderer; see the comment
+// on `courtXFromPointer` for why this isn't a raycast into the floor plane.
+window.addEventListener("mousemove", (event) => {
+  if (currentScreen !== "playing") return;
+  setPlayerPaddleX(state, renderer.courtXFromPointer(event.clientX));
+});
+
 window.addEventListener("keydown", (event) => {
   audio.resume();
 
@@ -183,42 +174,89 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
+  // Dev-only act jumps. These deliberately bypass `escalationArmed` so they
+  // keep working after the reveal has been seen — never exposed via a menu.
   if (currentScreen !== "playing") return;
-  const now = playedSeconds;
-  if (event.key === "1") timeline.setAct(Act.ONE, now);
-  else if (event.key === "2") timeline.setAct(Act.TWO, now);
-  else if (event.key === "3") timeline.setAct(Act.THREE, now);
-  else if (event.key === "p" || event.key === "P") timeline.startAutoplay(now);
-  else if (event.key === "h" || event.key === "H")
-    audio.playBlip(timeline.getAct());
+  if (event.key === "1") presentation.setAct(Act.ONE);
+  else if (event.key === "2") presentation.setAct(Act.TWO);
+  else if (event.key === "3") presentation.setAct(Act.THREE);
+  else if (event.key === "p" || event.key === "P") {
+    presentation.reset();
+    presentation.arm();
+  }
 });
 window.addEventListener("click", () => audio.resume());
 
 showScreen(currentScreen);
 
-function animate(): void {
+/** Clamped so a backgrounded tab doesn't resume with one enormous simulation step. */
+const MAX_FRAME_SECONDS = 0.1;
+let lastTimestamp: number | null = null;
+/**
+ * The last frame produced while playing. Reused verbatim while paused rather
+ * than calling `presentation.update` with dt 0 — the act machine should not be
+ * ticked at all on a frame the player isn't playing.
+ */
+let lastFrame = presentation.update(state, 0);
+
+function animate(timestamp: number): void {
   requestAnimationFrame(animate);
-  const now = tickGameClock(currentScreen === "playing");
-  if (currentScreen !== "playing" && currentScreen !== "paused") return;
 
-  // Paused: freeze game/HUD/audio state, but keep painting the same frame —
-  // an idle WebGL canvas that stops issuing draw calls while still visible
-  // is the more fragile state to leave a GPU-composited page in.
+  const dt =
+    lastTimestamp === null
+      ? 0
+      : Math.min((timestamp - lastTimestamp) / 1000, MAX_FRAME_SECONDS);
+  lastTimestamp = timestamp;
+
+  // `result` keeps the board on screen behind its scrim, same as `paused`, so
+  // it needs to keep painting too.
+  const boardVisible =
+    currentScreen === "playing" ||
+    currentScreen === "paused" ||
+    currentScreen === "result";
+  if (!boardVisible) return;
+
+  // Paused/result: freeze simulation, act clock, HUD and audio, but keep
+  // painting the same frame — an idle WebGL canvas that stops issuing draw
+  // calls while still visible is the more fragile state to leave a
+  // composited page in.
   if (currentScreen === "playing") {
-    timeline.tickAutoplay(now);
-    const act = timeline.getAct();
-    const elapsedInAct = timeline.elapsed(now);
+    playedSeconds += dt;
 
-    ball.position.x = Math.sin(now * 0.8) * 3;
+    const events = stepGame(state, dt);
+    const frame = presentation.update(state, dt);
+    lastFrame = frame;
 
-    updateRevealCamera(camera, act, elapsedInAct, now);
-    hud.update(act, elapsedInAct);
-    audio.update(act, elapsedInAct, now);
-    composer.update(act, isWatcherCut(act, elapsedInAct));
-    frameRate.sample(act);
+    // Presentation *commands* the game's difficulty tier. This is the one
+    // write in that direction and it is not a read-back from the renderer, so
+    // input → game → render still holds. Without it every tier collapses to 0
+    // and OPERATOR never visibly adapts (ROADMAP.md M4).
+    state.operatorTier = presentation.operatorTierFor();
+
+    if (events.paddleHit) audio.playBlip(frame.act);
+    if (events.wallHit) audio.playBlip(frame.act, true);
+    if (events.playerScored || events.operatorScored) audio.playScore(frame.act);
+
+    renderer.registerEvents(events);
+    audio.update(frame.act, playedSeconds, frame.stutterPulse);
+    renderer.render(state, frame, dt);
+
+    // The dossier is the climax of a match that escalated, regardless of who
+    // won. A match that never escalated just ends — nothing is shown, and the
+    // menu says nothing about it either.
+    if (state.matchOver) {
+      // Cleared either way: Continue must not offer to resume a finished
+      // match, which would drop the player into a frozen board.
+      hasActiveMatch = false;
+      audio.setActive(false);
+      // Escalated matches resolve to the dossier (undifferentiated by winner);
+      // every other match gets the plain outcome beat.
+      showScreen(frame.climax ? "dossier" : "result");
+    }
+    return;
   }
 
-  composer.render();
+  renderer.render(state, lastFrame, 0);
 }
 
-animate();
+requestAnimationFrame(animate);

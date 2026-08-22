@@ -6,7 +6,7 @@ import { FilmPass } from "three/examples/jsm/postprocessing/FilmPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RGBShiftShader } from "three/examples/jsm/shaders/RGBShiftShader.js";
-import { Act } from "./timeline";
+import { Act } from "../game/presentationState";
 import { prefersReducedMotion } from "../motion";
 
 /**

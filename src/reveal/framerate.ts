@@ -1,4 +1,4 @@
-import { Act } from "./timeline";
+import { Act } from "../game/presentationState";
 
 /**
  * Per-act frame-time sampler, dev-only.
