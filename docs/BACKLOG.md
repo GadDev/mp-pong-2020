@@ -109,12 +109,15 @@ undifferentiated — making the reveal a *reward for winning* turns it into
 an unlock, and a player who loses and gets nothing has been punished with
 absence of the only thing the game was building toward.
 
-**Trigger-point tuning as a first-class task.** `ROADMAP.md` M4 says the
-escalation fires on "rally count or score threshold, whichever tests
-better." That's an honest deferral, but it means the single most
-pacing-sensitive number in the project is currently unspecified. Post-ship,
-this is worth actually A/B-feeling rather than leaving at whatever value
-shipped.
+**Trigger-point tuning as a first-class task.** `ROADMAP.md` M4's "rally count
+or score threshold, whichever tests better" is now resolved in code — rally
+count primary, score as a backstop, plus minimum act-dwell floors with an
+endgame override. But "tests better" was settled against a *scripted* player
+at three skill levels, not against humans, so the most pacing-sensitive
+numbers in the project are still only simulation-fitted. This stays a
+first-class post-ship task. The numbers to feel out are
+`ACT_TWO_RALLY_TRIGGER`, `ACT_ONE_MIN_SECONDS`, `ACT_TWO_MIN_SECONDS`, and
+`OPERATOR_TIERS[].aimError`.
 
 ## Tier 3 — speculative, probably never
 
@@ -213,15 +216,18 @@ value is entirely in being rare.
 Not features — unresolved specification. Flagging so they don't quietly
 become defaults chosen by whoever implements them first.
 
-1. **`GadDev/GadDev` is load-bearing and unverified.** `MISSION.md`,
-   `LORE.md`, `MOODBOARD.md`, and `ROADMAP.md` M4 all cite that profile
-   README as the single source of truth for the dossier content — i.e. the
-   actual payoff of the project. Nobody has confirmed in-session that the
-   repo exists or what's in it (`gh` was unauthenticated at time of
-   writing). The one-source-of-truth design is right; it just needs to
-   point at something real. **Verify before M4.** Do not inline the bio
-   into these docs — that recreates the drift problem the citation exists
-   to prevent.
+1. ~~**`GadDev/GadDev` is load-bearing and unverified.**~~ **Resolved during
+   Milestone 4.** `gh` is still unauthenticated, so the profile README was
+   fetched over its public raw URL instead: the repo exists and carries the
+   bio the dossier needs (name, senior frontend engineer / frontend architect,
+   12+ years since 2014, React/TypeScript specialisms, consultant in
+   Luxembourg, current full-stack and AI focus, LinkedIn link). The
+   one-source-of-truth design holds and now points at something real. The docs
+   still don't restate it. The runtime strings live in `src/ui/dossier.ts`,
+   because `TECHSTACK.md` commits to a client-only build and the project's
+   payoff screen must not depend on a network fetch succeeding — that file is
+   the single place to update if the profile changes.
+
 2. ~~**"Continue" on the main menu is still undefined.**~~ **Resolved:**
    same-page-session resume only, no persisted mid-match state.
    `ROADMAP.md` M2 now states this explicitly.

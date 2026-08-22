@@ -29,45 +29,82 @@ npm run dev      # Vite dev server with HMR
 npm run build    # tsc -b && vite build → dist/
 npm run preview  # serve the production build locally
 npm run lint     # eslint over src, eslint.config.js, vite.config.ts
-npm test         # vitest run — CURRENTLY FAILS (no test files exist yet)
+npm test         # vitest run — game-state + act-trigger unit tests
 ```
 
-`npm test` exits 1 with "No test files found." Expected at this stage — see the testing policy below. This is why CI runs `lint` and `build` but deliberately **not** `test`; adding it would make every deploy red.
+`npm test` covers `src/game/` only — see the testing policy below. CI still runs `lint` and `build` and deliberately **not** `test`: the suite is a narrow correctness net for the physics and trigger math, not a deploy gate.
 
 The build emits a >500 kB chunk warning. That's Three.js. Don't code-split a single-scene game to silence it.
 
-## Current state: Milestone 1 (reveal spike) in progress
+## Current state: Milestones 0-4 landed
 
-Milestone 0 is done. `src/reveal/` is the Milestone 1 spike — the Act I → II → III camera/HUD/audio transition, running on dummy geometry with no gameplay, exactly as the roadmap prescribes.
-
-Milestone 2 (intro / menu / pause shell) is in progress on top of it —
-`src/ui/` and `src/persistence.ts`.
+Milestone 1's reveal spike ran on dummy geometry; Milestone 3 replaced it with
+real Pong and Milestone 4 wired the reveal to game-state triggers. The
+three-module boundary `TECHSTACK.md` specifies is now real code, not a plan.
 
 ```
-src/main.ts           # wiring + debug keys + rAF loop
-src/persistence.ts    # localStorage prefs (volume, skip-intro); hasSeenReveal lands in M4
-src/ui/               # M2 DOM-overlay chrome: intro, mainMenu, options, pause, theme.css
+src/main.ts                    # rAF loop, input, screen routing, debug keys
+src/persistence.ts             # localStorage: volume, skip-intro, hasSeenReveal
+src/game/
+  gameState.ts                 # ball/paddle physics, score, rally count, win
+                               #   condition, OPERATOR tiers. No `three` import.
+  presentationState.ts         # Act state machine + reveal triggers
+  gameState.test.ts            # collision/deflection/score/prediction
+  presentationState.test.ts    # trigger, dwell, disarming, pulse tests
+src/render/renderer.ts         # owns scene graph, camera, HUD, material swaps
 src/reveal/
-  timeline.ts         # Act enum + scripted act clock (throwaway, see below)
-  camera.ts           # per-act camera behaviour on one shared PerspectiveCamera
-  hud.ts / hud.css    # DOM-overlay HUD that degrades across acts
-  audio.ts            # procedural Web Audio placeholder
-  scene.ts            # dummy court: grid, two blocks, a sphere
-  palette.ts          # MOODBOARD.md hex tokens
+  camera.ts                    # per-act camera on one shared PerspectiveCamera
+  hud.ts / hud.css             # DOM-overlay HUD that degrades across acts
+  audio.ts                     # procedural Web Audio placeholder (M5 replaces)
+  scene.ts                     # the real arena: court, net, two paddles, ball
+  palette.ts                   # MOODBOARD.md hex tokens
+src/ui/                        # DOM-overlay chrome: intro, mainMenu, options,
+                               #   pause, dossier, theme.css
 ```
 
-**Debug controls** (logged to console on load): `P` runs the scripted Act I→II→III sequence, `1`/`2`/`3` jump directly to an act, `H` fires a hit blip. This doubles as the dev-only reveal re-trigger that `BACKLOG.md` flags as required scope — keep it, and keep it out of any player-facing menu.
+Data flows one direction: input → `gameState` → render. `presentationState`
+also *writes* `state.operatorTier` each frame — that is the one deliberate
+exception, and it is a command from presentation to game, not a read-back from
+the renderer. If `renderer.ts` ever starts mutating `gameState`, the whole
+reason a framework was judged unnecessary evaporates.
 
-### What here is throwaway vs. keepable
+**Debug controls:** `1`/`2`/`3` jump directly to an act, `P` restarts the act
+sequence and re-arms escalation, `?debug=reveal` re-arms escalation for a
+device that has already set `hasSeenReveal`. These bypass `escalationArmed` on
+purpose — they are the dev-only reveal re-trigger `BACKLOG.md` requires as M4
+scope. A hint line in the HUD documents them. Keep them, and keep them out of
+any player-facing menu.
 
-The code says this itself in comments, and it's worth respecting:
+### Resolved during Milestone 4
 
-- **`timeline.ts` is not `presentationState.ts`.** It's a scripted clock with fixed per-act durations for reviewing pacing. The real thing reads game-state triggers (rally count / score threshold) and arrives with Milestone 3/4.
-- **`audio.ts` is not the audio implementation.** `TECHSTACK.md` commits to Howler.js (not yet installed) for sample playback in Milestone 5. This is raw Web Audio oscillators proving the *crossfade pacing*, because no produced audio assets exist yet.
-- **`scene.ts` is not the arena.** A plane, two blocks, a dot. Real Pong geometry arrives in Milestone 3.
-- **`camera.ts`, `hud.ts`, `palette.ts` are largely keepable** — the per-act camera targets, the HUD degradation structure, and the palette tokens are the actual deliverable of this milestone.
+- **Reveal trigger** (ROADMAP.md left it as "whichever tests better"):
+  rally-count primary with a score backstop. Act 1→2 at 10 cumulative rallies
+  or 3 combined points; Act 2→3 at 5 combined points or 26 rallies. Rally
+  count measures engagement rather than skill; the score backstops stop a
+  lopsided, low-rally match from finishing with no climax.
+- **Minimum act dwell** (`ACT_ONE_MIN_SECONDS`, `ACT_TWO_MIN_SECONDS`) with an
+  endgame override. Both are load-bearing: without the floors a player losing
+  3-0 reaches Act 2 nine seconds in, before Act 1's stillness exists to be
+  violated; without the override a fast winner reaches the dossier with Act 3
+  barely started.
+- **OPERATOR's `aimError`.** Each tier keeps a non-zero aim offset, and the top
+  tier's exceeds the catchable extent. Without it a predicting paddle literally
+  cannot miss, and a competent player stalemates forever — the match never
+  ends, so the climax never fires. `LORE.md` requires tier 2 to stay beatable;
+  this is what makes that true rather than aspirational.
+- **`GadDev/GadDev` verified.** `gh` is still unauthenticated, but the profile
+  README was fetched over its public raw URL and carries the dossier bio. The
+  strings live in `src/ui/dossier.ts` (client-only build, so the payoff screen
+  must not depend on a fetch) and nowhere in `docs/` — one place to change.
 
-Note that `camera.ts` currently derives its Act 2 pull-back progress from `AUTOPLAY_ACT_DURATION[Act.TWO]`, i.e. a debug constant. That coupling needs breaking when the real trigger system lands.
+### Still placeholder
+
+- **`audio.ts` is not the audio implementation.** `TECHSTACK.md` commits to
+  Howler.js (not yet installed) for sample playback in Milestone 5. This is
+  raw Web Audio oscillators proving the *crossfade pacing*, because no produced
+  audio assets exist yet.
+- **No post-processing.** No `EffectComposer` yet; bloom plus one stylistic
+  pass arrives in Milestone 5, and Act 3's fog and rain-slicked floor with it.
 
 ## The architecture this is heading toward
 
@@ -88,11 +125,22 @@ Data flows one direction: input → game state → render. If `renderer.ts` star
 - **The reveal is discoverable once per device.** `hasSeenReveal` in `localStorage` permanently disarms escalation; there is deliberately no player-facing route back.
 - **Post-processing is budgeted:** bloom plus *one* stylistic pass. Chromatic aberration is Act-3-watcher-cut only — its value is being rare. (No `EffectComposer` yet; Milestone 5.)
 - **Audio is Howler.js when it's real.** Tone.js was rejected: the need is playback/mixing, not synthesis.
-- **Dossier bio content lives in the `GadDev/GadDev` profile README**, cited as single source of truth by four docs. Don't inline it here — the citation exists to prevent drift. Still unverified (`gh` unauthenticated when last checked).
+- **Dossier bio content's source of truth is the `GadDev/GadDev` profile README**, cited by four docs. Don't inline it into `docs/` — the citation exists to prevent drift. The runtime strings live in `src/ui/dossier.ts` because the build is client-only and the payoff screen must not depend on a fetch; that file is the one place to update if the profile changes.
 
 ## Testing policy
 
-Deliberately no broad suite. Most risk here is whether the reveal *feels* right, which tests can't assess. When tests arrive (Vitest is installed), they cover a narrow surface of pure functions with unambiguous answers: ball/paddle collision and deflection math, score and win-condition logic, act-transition trigger conditions. Don't test rendering output, don't chase coverage.
+Deliberately no broad suite. Most risk here is whether the reveal *feels*
+right, which tests can't assess. The suite that exists covers exactly the
+sanctioned surface — pure functions with unambiguous answers, all under
+`src/game/`: ball/paddle collision and deflection math, wall-bounce
+prediction, score and win-condition logic, act-transition triggers, dwell
+floors, and escalation disarming. Don't test rendering output, don't chase
+coverage, and don't add `test` to CI.
+
+Two tests are load-bearing regression guards rather than routine coverage, and
+should not be deleted as redundant: "fires the same number of times regardless
+of frame size" (the frame-rate-dependent pulse bug) and "leaves even the top
+tier beatable" (the OPERATOR stalemate).
 
 ## Deployment
 
@@ -105,23 +153,32 @@ Two independent workflows on push to `main`:
 
 **Manual step still required:** repo Settings → Pages → Source must be set to "GitHub Actions" before the first deploy will publish.
 
-## Known issues in the current spike code
+## Known issues
 
 Real, small, worth fixing when touched — not blockers:
 
-- **Pause doesn't freeze the act clock.** `RevealTimeline.elapsed()` is
-  `nowSeconds - actEnteredAt` against wall time, and `pauseGame()` in
-  `main.ts` only stops calling `tickAutoplay` — the clock keeps running.
-  Pausing for 30 s advances the reveal 30 s; quitting to menu and hitting
-  Continue does the same. This misses `ROADMAP.md` M2's "freezes the game
-  loop" done-condition and needs an accumulated pause offset or a
-  delta-driven timeline (same fix family as the delta-time item).
 - **`ui/intro.ts` never auto-advances.** `MOODBOARD.md` specifies "a few
   seconds of void black"; a player who presses nothing waits forever.
-- **`scene.ts` adds an `AmbientLight` that does nothing.** Every material in the scene is `MeshBasicMaterial`, which is unlit by design. Either drop the light or move to a material that responds to it.
-- **The Act 2 HUD flicker and audio stutter are frame-rate dependent.** Both use a fixed ~50 ms window tested once per frame (`flickerWindow > 2.3 && < 2.35`, `stutterWindow > 3.0 && < 3.05`). Duration therefore varies with refresh rate, and `MOODBOARD.md` specifies a *single-frame* flicker. This is the same class of bug as the delta-time issue `BACKLOG.md` flags for Milestone 3 — fix both together with an explicit frame-or-duration-based trigger.
-- **No `prefers-reduced-motion` path.** Now that strobing HUD corruption and camera drift are real code, this is a live photosensitivity concern rather than a hypothetical one. `BACKLOG.md` recommends promoting it into Milestone 5.
-- **No geometry/material disposal anywhere.** Harmless while nothing is torn down; becomes a leak the moment acts start rebuilding scene contents.
+- **No `prefers-reduced-motion` path.** Strobing HUD corruption, camera drift
+  and the watcher cut are all real code now, so this is a live
+  photosensitivity concern rather than a hypothetical one. `BACKLOG.md`
+  recommends promoting it into Milestone 5.
+- **Disposal is only wired for teardown, not for act transitions.**
+  `buildArena()` tracks what it allocates and `Renderer.dispose()` releases it,
+  and the act palette shifts mutate existing materials in place rather than
+  allocating. But nothing calls `Renderer.dispose()` in practice, and the
+  moment an act starts *rebuilding* scene contents that becomes a leak.
+- **Act 3 orbital control is screen-linear, not world-aligned.** The paddle
+  follows pointer X mapped across the viewport rather than raycast into the
+  floor plane, deliberately: a raycast would send the paddle flying on every
+  watcher cut. The cost is that during the orbit, "left" on screen is no
+  longer "left" on the court. Predictability was judged the better trade, but
+  it is a trade.
+- **The reveal's pacing numbers have had one tuning pass, in simulation.**
+  The trigger values, dwell floors and `aimError` figures were fitted against
+  a scripted player at three skill levels, not against humans.
+  `BACKLOG.md` already flags trigger-point tuning as a first-class post-ship
+  task; this is that task.
 
 ## Legacy reference
 
