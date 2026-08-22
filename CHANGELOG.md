@@ -1,5 +1,11 @@
 # mp-pong-2020
 
+## 1.4.0
+
+### Minor Changes
+
+- [#7](https://github.com/GadDev/mp-pong-2020/pull/7) [`1ee2256`](https://github.com/GadDev/mp-pong-2020/commit/1ee225616deb7a107bb4f02c43f471e3bcae0148) Thanks [@GadDev](https://github.com/GadDev)! - Add a pre-game presence to the intro and menu (`src/presence/`): a cyan wireframe icosahedron above the title that turns slowly on its own, quickens and leans toward the pointer while you move, and eases back to the slow drift when you stop, plus two boot fragments (`SYSTEM READY.` / `AWAITING INPUT.`) that brighten its edges as they appear and then go silent for the session. This is `EXPLORATION.md` §3's Tier 1 — deliberately faceless, so `LORE.md`'s no-face rule holds and the Act 3 dossier keeps the reveal. It renders in-canvas on its own bare scene (no grid, nothing that telegraphs the arena) in its own layer and WebGL context, since `render/renderer.ts` owns the arena's renderer privately and the two canvases are never visible at the same time; all chrome remains DOM overlays. The mark is sized and positioned in pixel terms rather than world units, with separate offsets for the intro (bare title) and menu (title plus list), so it stays clear of the text at any viewport height, and `prefers-reduced-motion` disables all of its movement while keeping the speech brightening.
+
 ## 1.3.0
 
 ### Minor Changes
