@@ -18,8 +18,15 @@
     "type": "git",
     "url": "git+https://github.com/GadDev/mp-pong-2020.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "pong",
+    "threejs",
+    "typescript",
+    "vite",
+    "webgl",
+    "game"
+  ],
+  "author": "Alexandre Gadaix (GadDev)",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/GadDev/mp-pong-2020/issues"

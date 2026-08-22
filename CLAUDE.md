@@ -20,6 +20,7 @@ Two things to understand before touching anything:
 | `TECHSTACK.md` | Every resolved technical decision with its justification |
 | `BACKLOG.md` | Post-ship ideas, **plus "rejected with reasoning"** — read before proposing anything that sounds like an obvious win |
 | `NOTES.md` | Historical reasoning trail with a status header marking superseded entries. **Not current spec.** |
+| `EXPLORATION.md` | Open, undecided questions — game title, intro beat, pre-game presence. **Not spec, nothing here is committed scope.** |
 
 ## Commands
 
@@ -39,8 +40,13 @@ The build emits a >500 kB chunk warning. That's Three.js. Don't code-split a sin
 
 Milestone 0 is done. `src/reveal/` is the Milestone 1 spike — the Act I → II → III camera/HUD/audio transition, running on dummy geometry with no gameplay, exactly as the roadmap prescribes.
 
+Milestone 2 (intro / menu / pause shell) is in progress on top of it —
+`src/ui/` and `src/persistence.ts`.
+
 ```
 src/main.ts           # wiring + debug keys + rAF loop
+src/persistence.ts    # localStorage prefs (volume, skip-intro); hasSeenReveal lands in M4
+src/ui/               # M2 DOM-overlay chrome: intro, mainMenu, options, pause, theme.css
 src/reveal/
   timeline.ts         # Act enum + scripted act clock (throwaway, see below)
   camera.ts           # per-act camera behaviour on one shared PerspectiveCamera
@@ -103,6 +109,15 @@ Two independent workflows on push to `main`:
 
 Real, small, worth fixing when touched — not blockers:
 
+- **Pause doesn't freeze the act clock.** `RevealTimeline.elapsed()` is
+  `nowSeconds - actEnteredAt` against wall time, and `pauseGame()` in
+  `main.ts` only stops calling `tickAutoplay` — the clock keeps running.
+  Pausing for 30 s advances the reveal 30 s; quitting to menu and hitting
+  Continue does the same. This misses `ROADMAP.md` M2's "freezes the game
+  loop" done-condition and needs an accumulated pause offset or a
+  delta-driven timeline (same fix family as the delta-time item).
+- **`ui/intro.ts` never auto-advances.** `MOODBOARD.md` specifies "a few
+  seconds of void black"; a player who presses nothing waits forever.
 - **`scene.ts` adds an `AmbientLight` that does nothing.** Every material in the scene is `MeshBasicMaterial`, which is unlit by design. Either drop the light or move to a material that responds to it.
 - **The Act 2 HUD flicker and audio stutter are frame-rate dependent.** Both use a fixed ~50 ms window tested once per frame (`flickerWindow > 2.3 && < 2.35`, `stutterWindow > 3.0 && < 3.05`). Duration therefore varies with refresh rate, and `MOODBOARD.md` specifies a *single-frame* flicker. This is the same class of bug as the delta-time issue `BACKLOG.md` flags for Milestone 3 — fix both together with an explicit frame-or-duration-based trigger.
 - **No `prefers-reduced-motion` path.** Now that strobing HUD corruption and camera drift are real code, this is a live photosensitivity concern rather than a hypothetical one. `BACKLOG.md` recommends promoting it into Milestone 5.
