@@ -1,6 +1,7 @@
 import "./hud.css";
 import type { GameState, StepEvents } from "../game/gameState";
 import { Act, type PresentationFrame } from "../game/presentationState";
+import type { ActivePrompt } from "../game/observation/ObservationDirector";
 import { prefersReducedMotion } from "../motion";
 
 /**
@@ -35,6 +36,9 @@ const ACT_THREE_TAG = "EVAL-ID: 8841-C — ACTIVE";
 /** Seconds a score flash holds. Green/red only, per MOODBOARD.md. */
 const SCORE_FLASH_SECONDS = 0.5;
 
+/** How long the control scheme hint stays up the first time a match starts. */
+const CONTROLS_HINT_SECONDS = 5;
+
 export class RevealHud {
   private readonly root: HTMLDivElement;
   private readonly scoreLabel: HTMLDivElement;
@@ -44,12 +48,20 @@ export class RevealHud {
   private readonly designation: HTMLDivElement;
   private readonly panel: HTMLDivElement;
   private readonly feedTag: HTMLDivElement;
+  private readonly interview: HTMLDivElement;
+  private readonly interviewPrompt: HTMLDivElement;
+  private readonly interviewLeft: HTMLSpanElement;
+  private readonly interviewRight: HTMLSpanElement;
+  private activePromptId: string | null = null;
 
   private playerFlash = 0;
   private operatorFlash = 0;
   private fragmentIndex = 0;
   /** Seconds left on the reduced-motion held flicker; unused otherwise. */
   private corruptHold = 0;
+  /** Counts down once, from this HUD's construction — a match restart doesn't re-show it. */
+  private controlsHintRemaining = CONTROLS_HINT_SECONDS;
+  private readonly controlsHint: HTMLDivElement;
 
   constructor(container: HTMLElement) {
     this.root = document.createElement("div");
@@ -86,12 +98,37 @@ export class RevealHud {
     debugHint.textContent =
       "[dev] Esc: pause · 1/2/3: jump act · P: restart acts · ?debug=reveal: re-arm";
 
+    // Player-facing, unlike `debugHint` — shown once, briefly, then gone for
+    // the rest of the session rather than sitting permanently in the HUD.
+    this.controlsHint = document.createElement("div");
+    this.controlsHint.className = "reveal-hud__controls-hint reveal-hud__controls-hint--visible";
+    this.controlsHint.textContent = "MOUSE  ·  W/S  ·  ↑/↓";
+
+    // The interview — deliberately styled like the rest of the HUD's short,
+    // stacked, monospace copy (the designation readout, the Act-2
+    // fragments), not a dialog box or a questionnaire. `leftAnswer`/
+    // `rightAnswer` (when a question has them) sit either side of the
+    // prompt; whichever way the paddle is currently leaning brightens, so
+    // the answer is something the player *does*, not a button they click.
+    this.interview = document.createElement("div");
+    this.interview.className = "reveal-hud__interview";
+    this.interviewPrompt = document.createElement("div");
+    this.interviewPrompt.className = "reveal-hud__interview-prompt";
+    const interviewAnswers = document.createElement("div");
+    interviewAnswers.className = "reveal-hud__interview-answers";
+    this.interviewLeft = document.createElement("span");
+    this.interviewRight = document.createElement("span");
+    interviewAnswers.append(this.interviewLeft, this.interviewRight);
+    this.interview.append(this.interviewPrompt, interviewAnswers);
+
     this.root.append(
       this.scoreLabel,
       this.score,
       this.designation,
       this.panel,
       this.feedTag,
+      this.controlsHint,
+      this.interview,
       debugHint,
     );
     container.appendChild(this.root);
@@ -112,6 +149,14 @@ export class RevealHud {
     this.playerFlash = Math.max(0, this.playerFlash - dt);
     this.operatorFlash = Math.max(0, this.operatorFlash - dt);
     this.corruptHold = Math.max(0, this.corruptHold - dt);
+
+    if (this.controlsHintRemaining > 0) {
+      this.controlsHintRemaining = Math.max(0, this.controlsHintRemaining - dt);
+      this.controlsHint.classList.toggle(
+        "reveal-hud__controls-hint--visible",
+        this.controlsHintRemaining > 0,
+      );
+    }
 
     // The Act 2 flicker is the one moment the digits aren't the score.
     //
@@ -162,6 +207,34 @@ export class RevealHud {
       "reveal-hud__feed--visible",
       frame.act === Act.THREE && watcherCut,
     );
+  }
+
+  /**
+   * `leanDirection` is null (no lean), "left", or "right" — `main.ts` derives
+   * it from the same paddle position `ObservationDirector` reads, so the
+   * brightened side always matches whichever way the commit is actually
+   * about to land. `prompt` is null when there's nothing to show; this never
+   * renders a raw telemetry number, an answer history, or a score of any kind.
+   */
+  updateInterview(prompt: ActivePrompt | null, leanDirection: "left" | "right" | null): void {
+    if (!prompt) {
+      this.activePromptId = null;
+      this.interview.classList.remove("reveal-hud__interview--visible");
+      return;
+    }
+
+    // Re-set text only when the prompt actually changes, so the fade-in
+    // transition doesn't restart every frame a question just sits on screen.
+    if (this.activePromptId !== prompt.id) {
+      this.activePromptId = prompt.id;
+      this.interviewPrompt.textContent = prompt.prompt;
+      this.interviewLeft.textContent = prompt.leftAnswer ?? "";
+      this.interviewRight.textContent = prompt.rightAnswer ?? "";
+    }
+
+    this.interviewLeft.classList.toggle("reveal-hud__interview-answer--active", leanDirection === "left");
+    this.interviewRight.classList.toggle("reveal-hud__interview-answer--active", leanDirection === "right");
+    this.interview.classList.add("reveal-hud__interview--visible");
   }
 
   private updateDesignation(frame: PresentationFrame): void {

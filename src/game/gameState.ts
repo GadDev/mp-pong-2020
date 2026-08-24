@@ -52,7 +52,8 @@ export const MAX_DEFLECTION_RATIO = 1.75;
  * the climax never fires. The ball has to eventually outrun a paddle.
  */
 const RALLY_SPEEDUP_PER_HIT = 0.06;
-const MAX_RALLY_SPEEDUP = 1.4;
+/** Exported so the render layer can scale impact-reaction intensity against the real speed ceiling. */
+export const MAX_RALLY_SPEEDUP = 1.4;
 
 export const WINNING_SCORE = 7;
 
@@ -157,6 +158,12 @@ export interface GameState {
 /** Discrete things that happened during one `stepGame` call, for the render/audio layer to react to. */
 export interface StepEvents {
   paddleHit: boolean;
+  /** Which paddle registered the hit this step, or `null` on no hit. Read-only classification, not a physics input. */
+  paddleHitSide: "player" | "operator" | null;
+  /** Where across the paddle it struck, normalized to [-1, 1] from centre. 0 when `paddleHitSide` is null. */
+  paddleHitOffset: number;
+  /** Outgoing ball speed (world units/second) right after deflection. 0 when `paddleHitSide` is null. */
+  paddleHitSpeed: number;
   wallHit: boolean;
   playerScored: boolean;
   operatorScored: boolean;
@@ -165,6 +172,9 @@ export interface StepEvents {
 
 const NO_EVENTS: StepEvents = {
   paddleHit: false,
+  paddleHitSide: null,
+  paddleHitOffset: 0,
+  paddleHitSpeed: 0,
   wallHit: false,
   playerScored: false,
   operatorScored: false,
@@ -237,12 +247,17 @@ function rallySpeed(state: GameState): number {
  * proportional to how far from the paddle's centre the ball struck, and the
  * axial direction simply inverts.
  */
-function deflect(state: GameState, paddleX: number, outgoingZSign: number): void {
+function deflect(
+  state: GameState,
+  paddleX: number,
+  outgoingZSign: number,
+): { normalizedOffset: number; speed: number } {
   const offset = state.ball.x - paddleX;
   const normalized = Math.min(1, Math.max(-1, offset / PADDLE_HALF_WIDTH));
   const speed = rallySpeed(state);
   state.ball.vz = speed * outgoingZSign;
   state.ball.vx = normalized * speed * MAX_DEFLECTION_RATIO;
+  return { normalizedOffset: normalized, speed };
 }
 
 function awardPoint(state: GameState, to: "player" | "operator"): void {
@@ -335,8 +350,14 @@ function stepMirror(state: GameState, dt: number, mustIntercept: boolean): numbe
   return null;
 }
 
-/** OPERATOR's paddle movement for one frame. Its tier is set by the presentation layer. */
-function stepOperator(state: GameState, dt: number): void {
+/**
+ * OPERATOR's paddle movement for one frame. Its tier is set by the
+ * presentation layer. `aimErrorMultiplier` is the interview's one sanctioned
+ * gameplay-facing knob (`ObservationDirector.getOperatorAimErrorMultiplier`,
+ * nudged by the CONTROL/POSSIBILITY answer) — `main.ts` reads it and passes
+ * it in here every step; this module still never reaches out for it itself.
+ */
+function stepOperator(state: GameState, dt: number, aimErrorMultiplier: number): void {
   const tier = OPERATOR_TIERS[Math.min(state.operatorTier, OPERATOR_TIERS.length - 1)];
 
   // Only bother predicting while the ball is incoming; otherwise drift to centre,
@@ -373,7 +394,7 @@ function stepOperator(state: GameState, dt: number): void {
       : aimed +
         adaptationBias +
         adaptationNoise +
-        tier.aimError * signedNoise(state.totalRallies + 1);
+        tier.aimError * aimErrorMultiplier * signedNoise(state.totalRallies + 1);
 
   const delta = chased - state.operatorPaddleX;
   if (Math.abs(delta) <= tier.deadzone) return;
@@ -387,14 +408,14 @@ function stepOperator(state: GameState, dt: number): void {
  * correctness bug), and substepped so a long frame can't tunnel the ball
  * through a paddle.
  */
-export function stepGame(state: GameState, dt: number): StepEvents {
+export function stepGame(state: GameState, dt: number, aimErrorMultiplier = 1): StepEvents {
   if (state.paused || state.matchOver || dt <= 0) return { ...NO_EVENTS };
 
   state.matchClock += dt;
 
   if (state.serveDelay > 0) {
     state.serveDelay = Math.max(0, state.serveDelay - dt);
-    stepOperator(state, dt);
+    stepOperator(state, dt, aimErrorMultiplier);
     return { ...NO_EVENTS };
   }
 
@@ -407,7 +428,7 @@ export function stepGame(state: GameState, dt: number): StepEvents {
   const h = dt / substeps;
 
   for (let i = 0; i < substeps; i += 1) {
-    stepOperator(state, h);
+    stepOperator(state, h, aimErrorMultiplier);
 
     state.ball.x += state.ball.vx * h;
     state.ball.z += state.ball.vz * h;
@@ -426,13 +447,12 @@ export function stepGame(state: GameState, dt: number): StepEvents {
         state.ball.z = COURT_HALF_LENGTH - BALL_RADIUS;
         state.rallyLength += 1;
         state.totalRallies += 1;
-        const normalizedOffset = Math.min(
-          1,
-          Math.max(-1, (state.ball.x - state.playerPaddleX) / PADDLE_HALF_WIDTH),
-        );
-        observePlayerHit(state.behaviorProfile, normalizedOffset, state.matchClock);
-        deflect(state, state.playerPaddleX, -1);
+        const hit = deflect(state, state.playerPaddleX, -1);
+        observePlayerHit(state.behaviorProfile, hit.normalizedOffset, state.matchClock);
         events.paddleHit = true;
+        events.paddleHitSide = "player";
+        events.paddleHitOffset = hit.normalizedOffset;
+        events.paddleHitSpeed = hit.speed;
       } else {
         awardPoint(state, "operator");
         events.operatorScored = true;
@@ -447,8 +467,11 @@ export function stepGame(state: GameState, dt: number): StepEvents {
         state.ball.z = -COURT_HALF_LENGTH + BALL_RADIUS;
         state.rallyLength += 1;
         state.totalRallies += 1;
-        deflect(state, state.operatorPaddleX, 1);
+        const hit = deflect(state, state.operatorPaddleX, 1);
         events.paddleHit = true;
+        events.paddleHitSide = "operator";
+        events.paddleHitOffset = hit.normalizedOffset;
+        events.paddleHitSpeed = hit.speed;
       } else {
         awardPoint(state, "player");
         events.playerScored = true;

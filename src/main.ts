@@ -6,7 +6,9 @@ import {
   type GameState,
 } from "./game/gameState";
 import { Act, PresentationState } from "./game/presentationState";
+import { InputController } from "./input";
 import { BehaviorTracker } from "./game/observation/BehaviorTracker";
+import { ObservationDirector } from "./game/observation/ObservationDirector";
 import { Renderer } from "./render/renderer";
 import { RevealAudio } from "./reveal/audio";
 import { createIntroScreen } from "./ui/intro";
@@ -73,6 +75,16 @@ const presentation = new PresentationState({
  * `behaviorTracker.getProfile()`. Not surfaced anywhere in the UI.
  */
 const behaviorTracker = new BehaviorTracker();
+/**
+ * The diegetic interview: reads `state`/`presentation`'s frame/
+ * `behaviorTracker`'s profile, decides whether to surface a scripted
+ * question or a behavior-derived observation, and holds this run's answers.
+ * Like `behaviorTracker`, it's a fourth optional module that never writes
+ * back into `GameState` directly — its two multipliers below are read
+ * explicitly by the caller and threaded through `stepGame`/`renderer.render`
+ * each frame instead.
+ */
+const observationDirector = new ObservationDirector();
 
 type Screen =
   | "intro"
@@ -161,6 +173,7 @@ function startNewGame(): void {
   state = createGameState();
   presentation.reset();
   behaviorTracker.reset();
+  observationDirector.reset();
   // Re-evaluated per match, not fixed at construction: the previous match may
   // have just set `hasSeenReveal`, and ROADMAP.md M4 requires every subsequent
   // New Game to check it.
@@ -204,6 +217,22 @@ window.addEventListener("mousemove", (event) => {
   if (currentScreen !== "playing") return;
   setPlayerPaddleX(state, renderer.courtXFromPointer(event.clientX));
 });
+
+/**
+ * W/S and ArrowUp/ArrowDown drive the same paddle as the mouse, through the
+ * same `setPlayerPaddleX` entry point — `InputController` only ever reports
+ * a held-key axis, never touches `GameState` itself, and a future gamepad
+ * source could report through the same axis without this movement code
+ * changing at all.
+ */
+const keyboardInput = new InputController(() => currentScreen === "playing");
+/** World units/second at full deflection, and how fast the paddle ramps to
+ * it — kept close enough to the mouse's instant response that switching
+ * schemes mid-match doesn't feel like a different game, while still reading
+ * as smoothed rather than teleporting. */
+const KEY_MOVE_SPEED = 7.5;
+const KEY_ACCEL_PER_SECOND = 9;
+let keyboardVelocity = 0;
 
 window.addEventListener("keydown", (event) => {
   audio.resume();
@@ -312,7 +341,16 @@ function animate(timestamp: number): void {
   if (currentScreen === "playing") {
     playedSeconds += dt;
 
-    const events = stepGame(state, dt);
+    // Keyboard axis → velocity → position, applied before `stepGame` so a
+    // key-driven move is visible to this frame's collision check exactly
+    // like a mouse move already is.
+    const targetVelocity = keyboardInput.axis() * KEY_MOVE_SPEED;
+    keyboardVelocity += (targetVelocity - keyboardVelocity) * Math.min(1, dt * KEY_ACCEL_PER_SECOND);
+    if (keyboardVelocity !== 0) {
+      setPlayerPaddleX(state, state.playerPaddleX + keyboardVelocity * dt);
+    }
+
+    const events = stepGame(state, dt, observationDirector.getOperatorAimErrorMultiplier());
     const frame = presentation.update(state, dt);
     lastFrame = frame;
     behaviorTracker.update(state, dt, events);
@@ -323,11 +361,14 @@ function animate(timestamp: number): void {
     // and OPERATOR never visibly adapts (ROADMAP.md M4).
     state.operatorTier = presentation.operatorTierFor();
 
+    const activePrompt = observationDirector.update(state, frame, behaviorTracker.getProfile(), dt);
+    renderer.updateInterview(activePrompt, observationDirector.leanDirection(state));
+
     if (events.paddleHit) audio.playBlip(frame.act);
     if (events.wallHit) audio.playBlip(frame.act, true);
     if (events.playerScored || events.operatorScored) audio.playScore(frame.act);
 
-    renderer.registerEvents(events);
+    renderer.registerEvents(state, events);
     audio.update(
       frame.act,
       playedSeconds,
@@ -337,7 +378,7 @@ function animate(timestamp: number): void {
       state.rallyLength,
     );
     audio.updateExchange(frame.exchangeIntensity);
-    renderer.render(state, frame, dt);
+    renderer.render(state, frame, dt, observationDirector.getEnvironmentVarianceMultiplier());
 
     // The dossier is the climax of a match that escalated, regardless of who
     // won. A match that never escalated just ends — nothing is shown, and the
