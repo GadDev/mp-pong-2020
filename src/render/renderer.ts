@@ -18,6 +18,7 @@ import {
 import { CYAN, DEEP_BLUE, SMOG_PURPLE_BLACK, VOID_BLACK } from "../reveal/palette";
 import { createRevealComposer, type RevealComposer } from "../reveal/postprocessing";
 import { FrameRateProbe } from "../reveal/framerate";
+import { buildHorizon, type Horizon } from "../reveal/horizon";
 import { motionScale } from "../motion";
 
 /**
@@ -44,6 +45,7 @@ export class Renderer {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly arena: Arena;
+  private readonly horizon: Horizon;
   private readonly hud: RevealHud;
   private readonly composer: RevealComposer;
   private readonly frameRate = new FrameRateProbe();
@@ -58,6 +60,7 @@ export class Renderer {
 
   constructor(container: HTMLElement) {
     this.arena = buildArena();
+    this.horizon = buildHorizon(this.arena.scene);
 
     this.camera = new THREE.PerspectiveCamera(
       60,
@@ -140,6 +143,7 @@ export class Renderer {
     }
 
     this.applyActPalette(frame.act, frame.exchangeIntensity, dt);
+    this.horizon.update(frame.act, dt);
     this.updateBallTrail(state, frame.exchangeIntensity);
     this.hud.update(state, frame, watcherCut, dt);
 
@@ -219,6 +223,7 @@ export class Renderer {
 
   dispose(): void {
     window.removeEventListener("resize", this.handleResize);
+    this.horizon.dispose();
     this.arena.dispose();
     this.composer.dispose();
     this.renderer.dispose();
