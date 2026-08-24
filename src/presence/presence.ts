@@ -1,24 +1,29 @@
 import * as THREE from "three";
-import { CYAN, NEAR_WHITE, VOID_BLACK } from "../reveal/palette";
+import { VOID_BLACK } from "../reveal/palette";
 import { prefersReducedMotion } from "../motion";
+import { createFace, type Face, type SpeechDrive } from "./face";
+import { MAX_FORWARD_Z } from "./faceMesh.data";
 
 /**
- * The pre-game presence — `EXPLORATION.md` §3, Tier 1 ("the Bit, not the
- * MCP"). A non-anthropomorphic object with obvious internal state that
- * reacts to the player: it turns slowly on its own, quickens and leans
- * toward the cursor while you move, and eases back down when you stop.
+ * The pre-game presence — `EXPLORATION.md` §3. Originally Tier 1 (a
+ * non-anthropomorphic object reacting to the player); now Tier 3, a
+ * faceted humanoid face that talks. See `EXPLORATION.md` for the amendment
+ * and the open question it leaves against `LORE.md`'s pre-reveal "no face"
+ * rule.
  *
- * Deliberately not a face. `LORE.md` keeps OPERATOR a *function* until the
- * Act 3 dossier, so nothing here may read as a character on a first pass.
- * It also may not telegraph the arena (`MOODBOARD.md`: the intro has "no
+ * It still may not telegraph the arena (`MOODBOARD.md`: the intro has "no
  * grid yet"), which is why this owns its own bare scene rather than
  * borrowing the court from `reveal/scene.ts`.
  */
 export type PresenceLayout = "intro" | "menu";
 
 export interface Presence {
-  /** `speaking` brightens the edges while a voice fragment is on screen. */
-  update(dt: number, speaking: boolean): void;
+  /**
+   * `speaking` brightens the mark while a fragment is on screen; `drive` is
+   * what the mouth moves to. They are deliberately separate — a voice going
+   * quiet mid-line shouldn't darken the mark.
+   */
+  update(dt: number, speaking: boolean, drive: SpeechDrive): void;
   render(): void;
   /** Which overlay is on screen — decides how much room the text needs. */
   setLayout(kind: PresenceLayout): void;
@@ -34,16 +39,24 @@ const RADIUS = 0.58; // world units; the on-screen size is set by setViewport
 // the intro is a 48px title alone, the menu adds the options list under it.
 const CHROME_HALF_HEIGHT_PX = { intro: 24, menu: 96 } as const;
 const GAP_PX = 14;
-const MAX_RADIUS_PX = 95;
+// Per-layout, unlike the floor below it: the mask's whole information content
+// is the density of its net, and at the menu's size that net is too fine to
+// read as anatomy. The intro can afford the room — the title is the only other
+// thing on screen.
+const MAX_RADIUS_PX = { intro: 190, menu: 95 } as const;
 const MIN_RADIUS_PX = 26;
 const BASE_SPIN = 0.06; // rad/s — never fully stops, so it's alive on load
 const ATTENTIVE_SPIN = 0.26; // rad/s while the player is moving
 const SETTLE_AFTER = 0.45; // s of pointer stillness before it eases back down
 const SPIN_DAMPING = 2.2; // how fast spin approaches its target
 const TILT_DAMPING = 2.6; // how fast the lean follows the cursor
-const MAX_TILT = 0.32; // rad — a lean, not a stare
-const QUIET_OPACITY = 0.42;
-const SPEAKING_OPACITY = 0.95;
+// The mask has no back of head (`faceMesh.data.ts` — no ears, no skull, no
+// neck), so both rotations are bounded well below the old shared 0.32 rad:
+// past roughly a fifth of a radian its open edge comes into view and it stops
+// reading as a head at all. Two constants because they were one constant doing
+// two unrelated jobs.
+const MAX_SWAY = 0.14; // rad — idle side-to-side
+const MAX_LEAN = 0.16; // rad — cursor follow; a lean, not a stare
 
 export function createPresence(container: HTMLElement): Presence {
   const scene = new THREE.Scene();
@@ -56,6 +69,12 @@ export function createPresence(container: HTMLElement): Presence {
     100,
   );
   camera.position.set(0, 0, 4.6);
+
+  // No lights, deliberately. `presence/face.ts` is a line drawing — cyan
+  // wireframe over a void-black fill that exists only to occlude the far side
+  // of the net. The three lights this scene used to carry were for the lit,
+  // flat-shaded head that preceded it, and shading is exactly what made that
+  // version read as an object rather than a construct.
 
   // Its own context rather than the game's: `render/renderer.ts` owns the
   // arena's WebGLRenderer privately, and the presence is pre-game chrome, not
@@ -73,17 +92,9 @@ export function createPresence(container: HTMLElement): Presence {
   tilt.add(spinner);
   scene.add(tilt);
 
-  const solid = new THREE.IcosahedronGeometry(RADIUS, 1);
-  const geometry = new THREE.WireframeGeometry(solid);
-  solid.dispose();
-
-  const material = new THREE.LineBasicMaterial({
-    color: CYAN,
-    transparent: true,
-    opacity: QUIET_OPACITY,
-  });
-  const wireframe = new THREE.LineSegments(geometry, material);
-  spinner.add(wireframe);
+  const face: Face = createFace();
+  face.group.scale.setScalar(RADIUS);
+  spinner.add(face.group);
 
   // Photosensitivity: no drift, no pulse, no spin. The object still exists
   // and still brightens when it speaks — it just never moves.
@@ -128,11 +139,20 @@ export function createPresence(container: HTMLElement): Presence {
     const available = (viewportHeight / 2 - chromeHalfPx - GAP_PX * 2) / 2;
     const radiusPx = Math.max(
       MIN_RADIUS_PX,
-      Math.min(MAX_RADIUS_PX, available),
+      Math.min(MAX_RADIUS_PX[layoutKind], available),
     );
     const offsetPx = chromeHalfPx + GAP_PX + radiusPx;
 
-    tilt.scale.setScalar((radiusPx * worldPerPx) / RADIUS);
+    // `worldPerPx` is derived at z=0, but the mask's nose reaches
+    // `MAX_FORWARD_Z` toward the camera and a perspective camera magnifies
+    // whatever is nearest it. Solving for the scale that lands the *nearest*
+    // part of the mask at `radiusPx` — rather than padding `GAP_PX` to
+    // absorb it — keeps the margin correct at every viewport size instead of
+    // just the one it was eyeballed at.
+    const flat = radiusPx * worldPerPx;
+    const perDataUnit = flat / (1 + (MAX_FORWARD_Z * flat) / camera.position.z);
+
+    tilt.scale.setScalar(perDataUnit / RADIUS);
     tilt.position.y = offsetPx * worldPerPx;
   }
 
@@ -155,41 +175,45 @@ export function createPresence(container: HTMLElement): Presence {
 
   setViewport(window.innerWidth, window.innerHeight);
 
-  const quietColor = new THREE.Color(CYAN);
-  const speakingColor = new THREE.Color(NEAR_WHITE);
+  let facePhase = 0;
 
-  function update(dt: number, speaking: boolean): void {
+  function update(dt: number, speaking: boolean, drive: SpeechDrive): void {
     // Speech brightening is the one thing reduced motion keeps — it's a
     // fade, not movement, and it's what makes a fragment feel spoken.
     speakingMix = approach(speakingMix, speaking ? 1 : 0, dt * 4);
-    material.opacity =
-      QUIET_OPACITY + (SPEAKING_OPACITY - QUIET_OPACITY) * speakingMix;
-    material.color.copy(quietColor).lerp(speakingColor, speakingMix * 0.8);
+    face.update(dt, drive);
 
     if (prefersReducedMotion()) return;
 
     sincePointerMove += dt;
     const attentive = sincePointerMove < SETTLE_AFTER;
 
+    // A face is bounded, not a spinning object — it never turns far enough
+    // to show its back. Idle motion is a slow side-to-side sway instead of
+    // the icosahedron's continuous rotation.
     spin = approach(
       spin,
       attentive ? ATTENTIVE_SPIN : BASE_SPIN,
       dt * SPIN_DAMPING,
     );
-    spinner.rotation.y += spin * dt;
+    facePhase += spin * dt;
+    spinner.rotation.y = Math.sin(facePhase) * MAX_SWAY;
 
     tilt.rotation.x = approach(
       tilt.rotation.x,
-      pointer.y * MAX_TILT,
+      pointer.y * MAX_LEAN,
       dt * TILT_DAMPING,
     );
     tilt.rotation.y = approach(
       tilt.rotation.y,
-      pointer.x * MAX_TILT,
+      pointer.x * MAX_LEAN,
       dt * TILT_DAMPING,
     );
 
-    const pulse = 1 + speakingMix * 0.035;
+    // Small, and smaller than it was: 3.5% was tuned against a mark a third
+    // of this one's size, where it was a subtle breath. On the mask it's an
+    // eight-pixel lurch that also eats the top margin `applyLayout` reserves.
+    const pulse = 1 + speakingMix * 0.015;
     spinner.scale.setScalar(pulse);
   }
 
@@ -204,8 +228,7 @@ export function createPresence(container: HTMLElement): Presence {
       window.removeEventListener("pointermove", onPointerMove);
       renderer.dispose();
       renderer.domElement.remove();
-      geometry.dispose();
-      material.dispose();
+      face.dispose();
       scene.clear();
     },
   };

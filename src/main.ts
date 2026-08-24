@@ -13,13 +13,17 @@ import { createMainMenu } from "./ui/mainMenu";
 import { createOptionsScreen } from "./ui/options";
 import { createPauseOverlay } from "./ui/pause";
 import { createDossierScreen } from "./ui/dossier";
+import { createPresenceBed } from "./presence/bed";
+import { loadMonologueSpeaker } from "./presence/clips";
 import { createPresence } from "./presence/presence";
-import { createPresenceVoice } from "./presence/voice";
+import { createPresenceVoice, scriptDurationSeconds } from "./presence/voice";
 import { createResultScreen } from "./ui/result";
 import {
+  getHasHeardIntroMonologue,
   getHasSeenReveal,
   getSkipIntro,
   getVolume,
+  setHasHeardIntroMonologue,
   setHasSeenReveal,
   setSkipIntro,
   setVolume,
@@ -51,7 +55,8 @@ const debugReveal =
 
 const renderer = new Renderer(gameLayer);
 const presence = createPresence(presenceLayer);
-const presenceVoice = createPresenceVoice();
+const presenceBed = createPresenceBed();
+const presenceVoice = createPresenceVoice(getVolume, presenceBed);
 app.appendChild(presenceVoice.element);
 const audio = new RevealAudio();
 audio.setMasterVolume(getVolume());
@@ -92,13 +97,18 @@ function showScreen(screen: Screen): void {
   // the only thing paying attention to the player.
   const presenceVisible = !gameVisible && screen !== "dossier";
   presenceLayer.style.display = presenceVisible ? "block" : "none";
+  presenceBed.setActive(presenceVisible);
   presenceVoice.element.style.display = presenceVisible ? "flex" : "none";
   // The intro is a bare title; the menu adds a list under it. The mark sits
   // just above whichever, so it has to know which is on screen.
   presence.setLayout(screen === "intro" ? "intro" : "menu");
 
   if (screen === "intro") {
-    overlay = createIntroScreen({ onSkip: () => showScreen("menu") });
+    const bootKind = getHasHeardIntroMonologue() ? "boot" : "monologue";
+    overlay = createIntroScreen({
+      onSkip: () => showScreen("menu"),
+      autoAdvanceMs: (scriptDurationSeconds(bootKind) + 0.5) * 1000,
+    });
   } else if (screen === "menu") {
     overlay = createMainMenu({
       canContinue: hasActiveMatch,
@@ -175,6 +185,9 @@ function resumeGame(): void {
 function quitToMenu(): void {
   audio.setActive(false);
   showScreen("menu");
+  // A shorter, flatter script than the boot sequence — reports on itself,
+  // not on the match just played, per `presence/voice.ts`'s no-memory rule.
+  presenceVoice.start("return");
 }
 
 // Input → game state. Screen-space X, mapped by the renderer; see the comment
@@ -186,6 +199,7 @@ window.addEventListener("mousemove", (event) => {
 
 window.addEventListener("keydown", (event) => {
   audio.resume();
+  presenceBed.resume();
 
   if (event.key === "Escape") {
     if (currentScreen === "playing") pauseGame();
@@ -204,12 +218,50 @@ window.addEventListener("keydown", (event) => {
     presentation.arm();
   }
 });
-window.addEventListener("click", () => audio.resume());
+window.addEventListener("click", () => {
+  audio.resume();
+  presenceBed.resume();
+});
+
+/**
+ * How long the intro waits for the pre-rendered monologue before falling back
+ * to the system voice. Comfortably inside the first fragment's 0.6s lead-in,
+ * so in the common case the choice is invisible; the point of the cap is that
+ * a cold or failing fetch can't leave the intro silent while `intro.ts`'s
+ * auto-advance timer — which starts with the screen, not the voice — runs down
+ * underneath it.
+ */
+const MONOLOGUE_LOAD_DEADLINE_MS = 450;
 
 showScreen(currentScreen);
-// Boot fragments run once, with the intro beat. Skipping the intro skips them
-// too — they're the cabinet waking up, not a greeting.
-if (currentScreen === "intro") presenceVoice.start();
+// The very first boot a device ever sees gets the longer monologue; every
+// one after that gets the short, impersonal boot script.
+if (currentScreen === "intro") {
+  if (getHasHeardIntroMonologue()) {
+    presenceVoice.start("boot");
+  } else {
+    // The pre-rendered audio is preferred but must never hold up the intro:
+    // whichever settles first wins, and a load that's slow or broken just
+    // means the system voice carries the script. Racing rather than starting
+    // on the system voice and swapping later — a swap restarts the script,
+    // which on a slow load would replay a fragment the player already heard.
+    // `onComplete` is identical down both paths, so a failed load can neither
+    // spend `hasHeardIntroMonologue` on a monologue nobody heard nor skip
+    // spending it on one they did.
+    const deadline = new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), MONOLOGUE_LOAD_DEADLINE_MS);
+    });
+    void Promise.race([loadMonologueSpeaker(presenceBed), deadline]).then(
+      (speaker) => {
+        presenceVoice.start(
+          "monologue",
+          () => setHasHeardIntroMonologue(true),
+          speaker ?? undefined,
+        );
+      },
+    );
+  }
+}
 
 /** Clamped so a backgrounded tab doesn't resume with one enormous simulation step. */
 const MAX_FRAME_SECONDS = 0.1;
@@ -239,7 +291,7 @@ function animate(timestamp: number): void {
   if (!boardVisible) {
     if (currentScreen !== "dossier") {
       presenceVoice.update(dt);
-      presence.update(dt, presenceVoice.isSpeaking());
+      presence.update(dt, presenceVoice.isSpeaking(), presenceVoice.speechDrive());
       presence.render();
     }
     return;

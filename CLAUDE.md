@@ -72,6 +72,14 @@ src/reveal/
   scene.ts                     # the real arena: court, net, two paddles, ball
   palette.ts                   # MOODBOARD.md hex tokens
 src/presence/                  # pre-game presence: its own scene + voice
+  faceMesh.data.ts             # GENERATED: MediaPipe canonical face mesh
+                               #   (468v/898tri, Apache-2.0). Do not hand-edit.
+  face.ts                      # the wireframe mask + audio-driven jaw
+  speaker.ts                   # seam between "what it says" and "how"
+  tts.ts                       # speechSynthesis path (boot/return scripts)
+  clips.ts                     # pre-rendered monologue + amplitude envelope
+  bed.ts                       # authored machine-audio bed under the voice
+  audio/                       # the 7 rendered monologue lines (~104 kB)
 src/ui/                        # DOM-overlay chrome: intro, mainMenu, options,
                                #   pause, dossier, theme.css
 ```
@@ -113,10 +121,12 @@ any player-facing menu.
 
 ### Still placeholder
 
-- **`audio.ts` is not the audio implementation.** `TECHSTACK.md` commits to
+- **`reveal/audio.ts` is not the *game's* audio implementation.** `TECHSTACK.md` commits to
   Howler.js (not yet installed) for sample playback in Milestone 5. This is
   raw Web Audio oscillators proving the *crossfade pacing*, because no produced
-  audio assets exist yet.
+  audio assets exist for the *game* yet. The presence is a separate matter and
+  is no longer placeholder: `presence/bed.ts` is authored procedural audio by
+  design, not pending assets, and `presence/audio/` holds real rendered files.
 - **No post-processing.** No `EffectComposer` yet; bloom plus one stylistic
   pass arrives in Milestone 5, and Act 3's fog and rain-slicked floor with it.
 
@@ -135,6 +145,19 @@ Data flows one direction: input → game state → render. If `renderer.ts` star
 - **`three` is pinned exactly** (`0.185.1`, no caret), because Three.js breaks across minors and there's no regression suite. Don't loosen it.
 - **Green `#00FFA0` / red `#FF2D2D` are reserved exclusively for score feedback**, nowhere else, so they stay readable however much the HUD mutates. (Neither is in `palette.ts` yet — they arrive with real scoring.)
 - **Act 1's camera is dead still.** The stillness is what makes later movement land. Don't add juice to Act 1.
+- **The presence's mask has no back of head.** `faceMesh.data.ts` is a
+  forward-facing face mesh — no ears, no skull, no neck. `presence.ts`'s
+  `MAX_SWAY` and `MAX_LEAN` are bounded for that reason, not for taste: past
+  roughly 0.2 rad the open edge comes into view. Don't raise them, and don't
+  collapse them back into one constant.
+- **`presence/audio/` is committed rendered audio, and the only asset-derived
+  content in the repo besides `faceMesh.data.ts`.** Both carry their full
+  provenance in a header comment (source, licence, exact command). Regenerate
+  with espeak-ng, never with macOS `say` — Apple's voices are not clearly
+  redistributable in a public Pages build. If a monologue line's *text*
+  changes in `presence/voice.ts`, re-render it: `clips.ts` keys clips by text
+  so a stale line falls back to the system voice rather than playing the wrong
+  sentence, but that's a safety net, not the intent.
 - **Menus and HUD are DOM overlays, not in-canvas Three.js UI.** The one sanctioned exception is `src/presence/` — it's a rendered object *behind* the chrome, not chrome itself; all text, buttons and fragments are still DOM. Also: the menu must never acknowledge a twist exists, before or after the player has seen it.
 - **The reveal is discoverable once per device.** `hasSeenReveal` in `localStorage` permanently disarms escalation; there is deliberately no player-facing route back.
 - **Post-processing is budgeted:** bloom plus *one* stylistic pass. Chromatic aberration is Act-3-watcher-cut only — its value is being rare. (No `EffectComposer` yet; Milestone 5.)
@@ -194,6 +217,13 @@ Real, small, worth fixing when touched — not blockers:
   the old M1 dummy scene, before Milestone 3's real arena existed — so the
   numbers do not transfer on either axis. Re-measure;
   `reveal/framerate.ts` prints them per act in dev.
+- **The presence's jaw still moves under `prefers-reduced-motion`.** A
+  deliberate call, on the same reasoning as the speech brightening: it's the
+  face producing the sound, not the object drifting, and an inert face over a
+  speaking voice is worse. The sway, lean and speaking pulse are all correctly
+  suppressed — verified by measurement, the crown holds to the pixel across
+  frames while the chin still moves. Revisit if it reads as motion to anyone
+  who needs the setting.
 - **Reduced motion is wired but only smoke-tested against the dummy scene.**
   `src/motion.ts` is the single source — consumed by `camera.ts`, `hud.ts`,
   `postprocessing.ts`, `presence/presence.ts` and `ui/theme.css`. Don't call
@@ -211,10 +241,14 @@ Real, small, worth fixing when touched — not blockers:
   says `OPERATOR WINS` on the unescalated path, where the player may never
   have seen the designation readout that introduces the name — a
   pre-escalation result should resolve on the score alone.
-- **`hasSeenReveal` is persisted too early.** `presentationState.ts`'s
-  `onEscalation` fires at the Act 1→2 transition, so quitting or reloading
-  during Act 2 spends the single discovery on something never seen, with no
-  route back. It should be written when the dossier renders.
+- **`hasSeenReveal` is persisted too early.** (Note the presence's
+  `hasHeardIntroMonologue` deliberately does *not* have this bug —
+  `presence/voice.ts` fires `onComplete` only when a script finishes on its
+  own, and it's verified that quitting mid-monologue leaves it unspent. Fix
+  `hasSeenReveal` the same way.) `presentationState.ts`'s `onEscalation` fires at the Act 1→2 transition, so
+  quitting or reloading during Act 2 spends the single discovery on something
+  never seen, with no route back. It should be written when the dossier
+  renders.
 
 ## Legacy reference
 

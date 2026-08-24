@@ -3,6 +3,10 @@ import { GAME_TITLE } from "./title";
 
 export interface IntroScreenOptions {
   onSkip: () => void;
+  /** How long to wait before auto-advancing — sized by the caller to match
+   * whichever presence voice script (`presence/voice.ts`) is playing, since
+   * the first-ever-boot monologue runs much longer than the regular one. */
+  autoAdvanceMs: number;
 }
 
 /**
@@ -10,7 +14,10 @@ export interface IntroScreenOptions {
  * no grid yet, nothing that telegraphs Act 1's arena. Skip prompt appears
  * after a beat, not instantly, and any key/click skips.
  */
-export function createIntroScreen({ onSkip }: IntroScreenOptions): HTMLElement {
+export function createIntroScreen({
+  onSkip,
+  autoAdvanceMs,
+}: IntroScreenOptions): HTMLElement {
   const root = document.createElement("div");
   // Transparent so the pre-game presence (src/presence/) shows through, and
   // `--void` on top of it to drop the grid image, per MOODBOARD.md's "nothing
@@ -39,7 +46,7 @@ export function createIntroScreen({ onSkip }: IntroScreenOptions): HTMLElement {
 
   // "A few seconds," not an indefinite wait — an idle player still reaches
   // the menu rather than being stuck on the logo forever.
-  const autoAdvanceTimer = setTimeout(skip, 4500);
+  const autoAdvanceTimer = setTimeout(skip, autoAdvanceMs);
 
   function skip(): void {
     clearTimeout(skipDelayTimer);

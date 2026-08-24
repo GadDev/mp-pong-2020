@@ -188,6 +188,45 @@ and requires learning no one else's API.
 playback and mixing, not synthesis. Revisit only if the ambient pad
 becomes something generated live in-browser rather than a produced file.
 
+**Four alternative face geometries** (see `EXPLORATION.md` §4 for the full
+ladder). All lost to inlining the MediaPipe canonical face mesh.
+
+- *A parametric displaced quad grid.* The closest loser, and the only option
+  that could have produced a diagonal-free quad net — the other reference
+  look. A regular `PlaneGeometry` displaced by analytic anatomical fields
+  (brow ridge, socket recesses, nose ridge and wings, lip torus, jaw taper),
+  emitted as rows and columns rather than triangles. Zero assets, zero
+  licence, best lore fit, and jaw rows addressable by index. Rejected on
+  tuning cost: it reaches "uncanny topographic map" quickly and the last
+  stretch to "reads as a face" is slow taste work that wants a dev-only
+  slider panel to converge. Revisit if the quad look is ever wanted
+  specifically — the triangulated mesh cannot produce it.
+- *An external GLTF head model.* Correct from any angle, and rejected on
+  every other axis: an asset pipeline this build doesn't have, licence
+  diligence, 200-800 kB, and a loading state on the *intro* screen — a head
+  that pops in 400 ms after the logo is worse than no head. Someone else's
+  realistic topology is also the hardest thing to make read as constructed.
+- *A hand-authored vertex table.* Exact art direction, quad net, no
+  dependencies — and hours of blind coordinate authoring producing a diff
+  nobody can review. The parametric option got 90% of it procedurally and
+  stayed tunable.
+- *A raymarched SDF face.* Infinitely crisp lines and real control of line
+  *width*, which `LineBasicMaterial` cannot give (its `linewidth` is ignored
+  on every WebGL platform). Rejected because an anatomical SDF is harder than
+  the displacement fields above and shader authoring is unreviewable by diff.
+
+**A procedural formant / vocoder voice.** Unintelligible synthesised speech —
+an LFO-modulated formant filter over a pulse train — with the on-screen
+fragment carrying the meaning. Genuinely attractive: no assets,
+deterministic, fully processable, and the strongest lore fit on the list, a
+function emitting signal rather than a character speaking English. It is also
+the exact trigger the Tone.js rejection above names for revisiting synthesis,
+and needs no dependency since it's raw Web Audio. Rejected for now on two
+counts: it can land cute/8-bit rather than clinical, and it throws away the
+spoken second-person monologue that `EXPLORATION.md` §3's second amendment
+exists for. `presence/bed.ts` satisfies the underlying need — colouring the
+voice — without giving up the words.
+
 **In-canvas menu UI (Three.js text geometry, raycast buttons).** Rejected
 in favour of a DOM overlay. No menu screen in this game needs to exist in
 3D space; the browser already does text layout and hit-testing for free.

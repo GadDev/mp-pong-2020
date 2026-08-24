@@ -5,6 +5,7 @@
 const VOLUME_KEY = "mp-pong:volume";
 const SKIP_INTRO_KEY = "mp-pong:skipIntro";
 const HAS_SEEN_REVEAL_KEY = "mp-pong:hasSeenReveal";
+const HAS_HEARD_INTRO_MONOLOGUE_KEY = "mp-pong:hasHeardIntroMonologue";
 
 const DEFAULT_VOLUME = 0.7;
 
@@ -40,4 +41,20 @@ export function getHasSeenReveal(): boolean {
 
 export function setHasSeenReveal(seen: boolean): void {
   localStorage.setItem(HAS_SEEN_REVEAL_KEY, String(seen));
+}
+
+/**
+ * Gates the presence's one-time first-boot monologue (`presence/voice.ts`'s
+ * `INTRO_MONOLOGUE`). Set once it finishes playing, not when it starts —
+ * mirrors the fix `hasSeenReveal` still needs (CLAUDE.md "Known issues"):
+ * writing at the start of a sequence risks persisting "heard" for something
+ * cut short by a reload. Every boot after this reverts to the short
+ * `BOOT_SCRIPT`, same as a returning player.
+ */
+export function getHasHeardIntroMonologue(): boolean {
+  return localStorage.getItem(HAS_HEARD_INTRO_MONOLOGUE_KEY) === "true";
+}
+
+export function setHasHeardIntroMonologue(heard: boolean): void {
+  localStorage.setItem(HAS_HEARD_INTRO_MONOLOGUE_KEY, String(heard));
 }

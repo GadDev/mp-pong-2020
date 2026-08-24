@@ -219,18 +219,40 @@ never be visible.
 
 ## 3. The pre-game presence — "a Tron-style AI face that talks to you"
 
-> **DECIDED — Tier 1, built.** `src/presence/` implements the faceless
-> version: a cyan wireframe icosahedron above the title that turns slowly
-> on its own, quickens and leans toward the pointer while you move, and
-> eases back to the slow drift when you stop. (It never fully stops — a
-> dead-still version reads as a static logo for anyone who doesn't move
-> the mouse, and never moves at all on touch, which has no passive pointer
-> movement to wake it.) Two boot fragments (`SYSTEM READY.` / `AWAITING INPUT.`),
-> then silence for the session. Rendered in-canvas through the shared
-> `WebGLRenderer` on its own bare scene — no grid, nothing that
-> telegraphs the arena. The no-face rule stands; the counter-proposal
-> below (the face belongs in the Act 3 dossier) is still the plan. The
-> rest of this section is kept as the reasoning trail.
+> **SUPERSEDED — Tier 3, adopted.** Tier 1 shipped first (see below for that
+> reasoning trail) but the presence now overrides the no-face rule: it is a
+> faceted, low-poly humanoid face (`src/presence/face.ts`) that speaks its
+> boot fragments aloud via the browser's `speechSynthesis`
+> (`src/presence/tts.ts`), pitched and paced into a flat, artifact-y register
+> on purpose — synthetic, not warm, so it still reads as a function reporting
+> status rather than a character with an arc. Still: no eyes that read as
+> organic (angular glowing slits), no second-person copy, same clinical
+> fragments as before (`SYSTEM READY.` / `AWAITING INPUT.`), same
+> once-per-session silence.
+>
+> **Open question, deliberately not resolved here:** this does spend some of
+> what `LORE.md`'s "no face, no backstory teased before the climax" rule was
+> protecting — a synthetic voice at boot is more character than a silent
+> wireframe was. The mitigation is the *register* (flat, machine-toned,
+> uncanny rather than expressive) rather than removing the face, on the
+> reasoning that the reveal's actual payoff — "OPERATOR was a stand-in for
+> the developer" — is about identity, not about whether a face/voice existed
+> at all. Whether that mitigation is sufficient, or whether the Act 3
+> dossier payoff needs to be re-weighted now that the intro is no longer
+> silent, is unresolved and belongs to a future pass, not this one.
+>
+> **Further amendment: a one-time first-boot monologue.** `src/presence/voice.ts`'s
+> `INTRO_MONOLOGUE` — full sentences, addressed to "you" — plays once ever,
+> gated by `persistence.ts`'s `hasHeardIntroMonologue`; every boot after that
+> reverts to the short, impersonal `BOOT_SCRIPT`. This is a second, distinct
+> override of `LORE.md`'s "No second-person copy, ever," on top of the one
+> above. It stops short of the specific violation the doc names elsewhere
+> (`EXPLORATION.md` §2's "WELCOME BACK, SUBJECT"): it never claims to
+> recognise the player or implies memory across sessions, and it never says
+> the words "OPERATOR" or "the Division." Whether one-time second-person
+> address plus a synthetic talking face is still compatible with OPERATOR
+> reading as "a function, not a character" going into Act 2 is the same open
+> question as above, now with more surface area — not re-litigated here.
 
 ### The conflict, stated plainly
 
@@ -313,6 +335,88 @@ lands instead of leaking.
 
 ---
 
+## 4. The presence's face and voice — resolved
+
+> **Status: decided and built.** Unlike the rest of this file, this section is
+> a record rather than an open question. Losing options are in `BACKLOG.md`'s
+> "rejected, with reasoning."
+
+### What was wrong, measured rather than assumed
+
+§3 adopted a talking face. It did not deliver one. Screenshotting the intro:
+
+- **It read as a mushroom.** `LatheGeometry` is open at both ends and
+  single-sided, so the neck hole exposed the *interior* of the skull — the wide
+  lit funnel under the head was the inside of the mesh.
+- **Features sat ~0.3 world units too high.** The eyes were up in the crown and
+  read as a visor slit; the nose cone landed at mouth height; the mouth bar was
+  below the chin. The lathe's widest point was where a face narrows.
+- **The grid was noise.** `EdgesGeometry(geometry, 1)` — one *degree* — kept
+  every triangulation diagonal, so it was a lat/long net plus diagonals.
+- **You could see through it**, and at a 95 px radius cap the whole head was
+  190 px tall, too small for anatomy to read.
+
+The structural point, which is what forced a replacement rather than a repair:
+**a lathe of revolution is rotationally symmetric, and a face's entire
+information content is in its front plane.** No profile tuning reaches a face.
+
+### The axis that decided it
+
+§3's own amendment says the mitigation for overriding `LORE.md`'s no-face rule
+is *the register* — "if a face greets you at boot, the face cannot be the
+reveal." So the scoring axis is **constructed artifact (good) vs. character
+(bad)**, and it inverts the obvious ranking: blinking, brows, expression,
+smooth organic skin and a warm voice all read as better craft and all spend
+payoff Act 3 needs.
+
+A useful consequence, and the reason the chosen option is *more* spec-compliant
+than what it replaced: a bare wireframe with no skin reads as a model *of* a
+face. The lit, flat-shaded head it replaced read as an object.
+
+### What was built
+
+- **Geometry:** the MediaPipe canonical face mesh (468 vertices, 898 triangles,
+  Apache-2.0) inlined as typed arrays in `presence/faceMesh.data.ts` — ~9 kB
+  gzipped. Anatomically correct with no art direction required, and its varying
+  triangle density (dense at eyes and lips, sparse across the cheeks) *is* the
+  reference look. Its one lore cost is worth naming: a face-*tracking* mesh
+  reads as measurement, which brushes the objection that killed §3's Tier 2
+  ("an eye is unambiguously an observer, and being observed is the Act 3
+  reveal"). Weaker here — the presence is the thing meshed, not the player —
+  but not zero.
+- **Shading:** none. A void-black fill sits behind cyan lines purely to occlude
+  the far side of the net, and the presence scene's three lights were deleted.
+- **The mask has no back of head**, so both rotations are bounded well below
+  the old shared 0.32 rad — past roughly a fifth of a radian its open edge
+  comes into view.
+- **Voice:** three changes, none of which is a new dependency.
+  - The mouth is driven by *audio*, not by the fragment's on-screen window. It
+    used to flap whether or not anything was audible — including before the
+    first user gesture, when an utterance is queued but paused. Now: a measured
+    amplitude envelope where one exists, word-boundary impulses where they
+    don't, and the old phase clock only as a last resort (a muted player must
+    still see a face that talks).
+  - `presence/bed.ts` — an authored machine-audio layer under the voice. This
+    exists because of one hard limitation: `speechSynthesis` exposes no
+    MediaStream, so its output cannot be filtered at all. The voice being
+    uncolourable is why the colour comes from underneath it.
+  - The first-boot monologue is **pre-rendered** (`presence/clips.ts`), because
+    on the `speechSynthesis` path the register is whatever voice the device
+    ships — a coin flip, on a script that plays once ever with no route back.
+    espeak-ng rather than macOS `say`: right sound, and unambiguously
+    redistributable in a public Pages build.
+
+### The open question §3 left is still open
+
+None of this settles whether a synthetic talking face at boot is compatible
+with OPERATOR reading as "a function, not a character" going into Act 2. It
+does move the needle in the right direction — a wireframe mask is less of a
+character than a lit head, and an authored machine bed is less of a character
+than a stock assistant voice — but the question §3 records is unchanged, and
+still belongs to a future pass.
+
+---
+
 ## Recommended next steps
 
 Ordered by cost, and none of them are Milestone 2 blockers:
@@ -324,4 +428,5 @@ Ordered by cost, and none of them are Milestone 2 blockers:
    post-ship items — both are small, both are period-authentic, and both
    need the real court from M3 to exist first.
 4. ~~Leave the presence question open until M5.~~ Decided early — Tier 1,
-   built in `src/presence/`. See the note at the top of §3.
+   built in `src/presence/`, then superseded by Tier 3. See the note at the
+   top of §3, and §4 for the face and voice as built.
