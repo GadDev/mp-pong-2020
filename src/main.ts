@@ -6,6 +6,7 @@ import {
   type GameState,
 } from "./game/gameState";
 import { Act, PresentationState } from "./game/presentationState";
+import { BehaviorTracker } from "./game/observation/BehaviorTracker";
 import { Renderer } from "./render/renderer";
 import { RevealAudio } from "./reveal/audio";
 import { createIntroScreen } from "./ui/intro";
@@ -66,6 +67,12 @@ const presentation = new PresentationState({
   escalationArmed: debugReveal || !getHasSeenReveal(),
   onEscalation: () => setHasSeenReveal(true),
 });
+/**
+ * Local-only observation layer (no external analytics, nothing persisted):
+ * future adaptive AI / HUD anomalies / narrative triggers read
+ * `behaviorTracker.getProfile()`. Not surfaced anywhere in the UI.
+ */
+const behaviorTracker = new BehaviorTracker();
 
 type Screen =
   | "intro"
@@ -153,6 +160,7 @@ function startNewGame(): void {
   playedSeconds = 0;
   state = createGameState();
   presentation.reset();
+  behaviorTracker.reset();
   // Re-evaluated per match, not fixed at construction: the previous match may
   // have just set `hasSeenReveal`, and ROADMAP.md M4 requires every subsequent
   // New Game to check it.
@@ -307,6 +315,7 @@ function animate(timestamp: number): void {
     const events = stepGame(state, dt);
     const frame = presentation.update(state, dt);
     lastFrame = frame;
+    behaviorTracker.update(state, dt, events);
 
     // Presentation *commands* the game's difficulty tier. This is the one
     // write in that direction and it is not a read-back from the renderer, so
