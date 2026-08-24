@@ -9,6 +9,14 @@
  * rather than at it from above. The ball travels along Z; paddles slide
  * along X. The player is at +Z (nearest the camera), OPERATOR at -Z.
  */
+import {
+  adaptationProbability,
+  createBehaviorProfile,
+  learnedBehaviorBias,
+  observePlayerHit,
+  ADAPTATION_NOISE,
+  type BehaviorProfile,
+} from "./behaviorProfile";
 
 /** Half-width of the playable court on X — paddles slide within ±this. */
 export const COURT_HALF_WIDTH = 6;
@@ -140,6 +148,10 @@ export interface GameState {
   mirrorCooldown: number;
   /** Increments once per candidate movement; seeds the deterministic trigger/scale/delay rolls. */
   mirrorSeed: number;
+  /** Running read on the player's own tendencies — see `behaviorProfile.ts`. */
+  behaviorProfile: BehaviorProfile;
+  /** Elapsed match seconds, advanced by `dt`. Feeds timing telemetry only — no physics reads it. */
+  matchClock: number;
 }
 
 /** Discrete things that happened during one `stepGame` call, for the render/audio layer to react to. */
@@ -189,6 +201,8 @@ export function createGameState(): GameState {
     mirrorFireTimer: 0,
     mirrorCooldown: 0,
     mirrorSeed: 0,
+    behaviorProfile: createBehaviorProfile(),
+    matchClock: 0,
   };
 }
 
@@ -335,10 +349,31 @@ function stepOperator(state: GameState, dt: number): void {
 
   const mirrorTarget = stepMirror(state, dt, incoming);
 
+  // Adaptation only applies while actually predicting an incoming ball — it's
+  // a bias on the aim point, not a separate omniscient read of the future.
+  let adaptationBias = 0;
+  let adaptationNoise = 0;
+  if (incoming) {
+    const bias = learnedBehaviorBias(state.behaviorProfile);
+    const probability = adaptationProbability(state.behaviorProfile);
+    // Deterministic roll, keyed off the exchange count with a different
+    // multiplier than the aim-error noise below so the two don't correlate.
+    const roll = (signedNoise(state.totalRallies * 31 + 17) + 1) / 2;
+    if (roll < probability) {
+      adaptationBias = bias;
+      adaptationNoise = ADAPTATION_NOISE * signedNoise(state.totalRallies * 53 + 5);
+    }
+  }
+
   // Keyed on the exchange count, so the error stays fixed for the duration of
   // one incoming ball rather than jittering the paddle every frame.
   const chased =
-    mirrorTarget !== null ? mirrorTarget : aimed + tier.aimError * signedNoise(state.totalRallies + 1);
+    mirrorTarget !== null
+      ? mirrorTarget
+      : aimed +
+        adaptationBias +
+        adaptationNoise +
+        tier.aimError * signedNoise(state.totalRallies + 1);
 
   const delta = chased - state.operatorPaddleX;
   if (Math.abs(delta) <= tier.deadzone) return;
@@ -354,6 +389,8 @@ function stepOperator(state: GameState, dt: number): void {
  */
 export function stepGame(state: GameState, dt: number): StepEvents {
   if (state.paused || state.matchOver || dt <= 0) return { ...NO_EVENTS };
+
+  state.matchClock += dt;
 
   if (state.serveDelay > 0) {
     state.serveDelay = Math.max(0, state.serveDelay - dt);
@@ -389,6 +426,11 @@ export function stepGame(state: GameState, dt: number): StepEvents {
         state.ball.z = COURT_HALF_LENGTH - BALL_RADIUS;
         state.rallyLength += 1;
         state.totalRallies += 1;
+        const normalizedOffset = Math.min(
+          1,
+          Math.max(-1, (state.ball.x - state.playerPaddleX) / PADDLE_HALF_WIDTH),
+        );
+        observePlayerHit(state.behaviorProfile, normalizedOffset, state.matchClock);
         deflect(state, state.playerPaddleX, -1);
         events.paddleHit = true;
       } else {

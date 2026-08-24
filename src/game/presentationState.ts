@@ -59,6 +59,54 @@ const FLICKER_INTERVAL = 2.4;
 /** Mean seconds between Act 2's audio stutters. */
 const STUTTER_INTERVAL = 3.1;
 
+/**
+ * EXCHANGE: rally-driven environmental response. A long rally should make the
+ * environment feel more awake — grid brightness, fog thinning, an ambient
+ * audio layer, a hint of camera drift — with no explicit reward or combo UI.
+ * `exchangeIntensity` is the single 0..1 dial every one of those reads;
+ * everything downstream interpolates it rather than switching at a threshold.
+ *
+ * Control points from `state.rallyLength` (hits since the ball was last
+ * served) to target intensity. The suggested progression: 5 hits barely
+ * perceptible, 10 subtle, 15 is where atmospheric audio should start being
+ * audible, 20 noticeably deeper, 25+ the ceiling.
+ */
+const EXCHANGE_CURVE: ReadonlyArray<{ rally: number; intensity: number }> = [
+  { rally: 0, intensity: 0 },
+  { rally: 5, intensity: 0.06 },
+  { rally: 10, intensity: 0.28 },
+  { rally: 15, intensity: 0.55 },
+  { rally: 20, intensity: 0.8 },
+  { rally: 25, intensity: 1 },
+];
+
+/** Eased toward a rising target quickly — a long rally should register as it happens. */
+const EXCHANGE_ATTACK_RATE = 0.9;
+/** Eased toward a falling target slowly — "some effects should slowly decay". */
+const EXCHANGE_DECAY_RATE = 0.22;
+/**
+ * How much of the intensity ever reached this match persists as a floor once
+ * a rally ends, so "narrative progression should not fully reset" even though
+ * `rallyLength` itself snaps to 0 on every point. The floor itself decays,
+ * but far slower than the per-rally intensity above it.
+ */
+const EXCHANGE_MEMORY_RETENTION = 0.3;
+const EXCHANGE_MEMORY_DECAY_RATE = 0.015;
+
+/** Piecewise-linear lookup, clamped at the curve's ends. */
+function exchangeTargetFor(rallyLength: number): number {
+  if (rallyLength <= EXCHANGE_CURVE[0].rally) return EXCHANGE_CURVE[0].intensity;
+  for (let i = 1; i < EXCHANGE_CURVE.length; i++) {
+    const prev = EXCHANGE_CURVE[i - 1];
+    const next = EXCHANGE_CURVE[i];
+    if (rallyLength <= next.rally) {
+      const t = (rallyLength - prev.rally) / (next.rally - prev.rally);
+      return prev.intensity + (next.intensity - prev.intensity) * t;
+    }
+  }
+  return EXCHANGE_CURVE[EXCHANGE_CURVE.length - 1].intensity;
+}
+
 export interface PresentationFrame {
   act: Act;
   /** Seconds spent in the current act. Advanced by dt, so pausing genuinely freezes it. */
@@ -73,6 +121,8 @@ export interface PresentationFrame {
   stutterPulse: boolean;
   /** True once the match has ended after the escalation fired: show the dossier. */
   climax: boolean;
+  /** EXCHANGE dial, 0..1, smoothed from rally length. See `exchangeTargetFor`. */
+  exchangeIntensity: number;
 }
 
 export interface PresentationOptions {
@@ -94,6 +144,8 @@ export class PresentationState {
   private climaxReached = false;
   private escalationArmed: boolean;
   private readonly onEscalation?: () => void;
+  private exchangeIntensity = 0;
+  private exchangeMemory = 0;
 
   constructor(options: PresentationOptions) {
     this.escalationArmed = options.escalationArmed;
@@ -111,6 +163,8 @@ export class PresentationState {
     this.nextFlickerAt = FLICKER_INTERVAL;
     this.nextStutterAt = STUTTER_INTERVAL;
     this.climaxReached = false;
+    this.exchangeIntensity = 0;
+    this.exchangeMemory = 0;
   }
 
   /**
@@ -207,12 +261,30 @@ export class PresentationState {
       }
     }
 
+    // EXCHANGE: rally length drives a target intensity; a decaying memory of
+    // the peak keeps some of it alive across the point that just ended
+    // instead of snapping back to 0 with `rallyLength`.
+    const rallyTarget = exchangeTargetFor(state.rallyLength);
+    this.exchangeMemory = Math.max(
+      this.exchangeMemory * Math.exp(-EXCHANGE_MEMORY_DECAY_RATE * dt),
+      rallyTarget,
+    );
+    const floor = this.exchangeMemory * EXCHANGE_MEMORY_RETENTION;
+    const exchangeTarget = Math.max(rallyTarget, floor);
+    const exchangeRate =
+      exchangeTarget >= this.exchangeIntensity
+        ? EXCHANGE_ATTACK_RATE
+        : EXCHANGE_DECAY_RATE;
+    const exchangeK = 1 - Math.exp(-dt * exchangeRate);
+    this.exchangeIntensity += (exchangeTarget - this.exchangeIntensity) * exchangeK;
+
     return {
       act: this.act,
       elapsedInAct: this.elapsedInAct,
       flickerPulse,
       stutterPulse,
       climax: this.climaxReached,
+      exchangeIntensity: this.exchangeIntensity,
     };
   }
 }
