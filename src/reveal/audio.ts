@@ -4,6 +4,17 @@ import { Act } from "../game/presentationState";
 const STUTTER_DIP_SECONDS = 0.05;
 
 /**
+ * EXCHANGE ambient layer: a quiet high shimmer that fades in once a rally is
+ * running long, on top of whichever act pad is already playing. Gated so it
+ * stays inaudible below roughly the "15 hits" point on
+ * `presentationState.ts`'s EXCHANGE curve (intensity ~0.5) and reaches its
+ * ceiling gain only at the curve's max.
+ */
+const EXCHANGE_SHIMMER_GATE = 0.5;
+const EXCHANGE_SHIMMER_MAX_GAIN = 0.05;
+const EXCHANGE_SHIMMER_RAMP_SECONDS = 1.2;
+
+/**
  * Procedural placeholder only. TECHSTACK.md commits to Howler.js for real
  * sample playback/crossfading in Milestone 5 — there are no produced audio
  * assets yet, so this spike proves the *pacing* of the audio crossfade with
@@ -16,6 +27,9 @@ export class RevealAudio {
   private readonly padFilter: BiquadFilterNode;
   private readonly pad: OscillatorNode;
   private readonly padSub: OscillatorNode;
+  private readonly shimmerGain: GainNode;
+  private readonly shimmer: OscillatorNode;
+  private readonly shimmerDetune: OscillatorNode;
   private active = true;
 
   constructor() {
@@ -47,6 +61,26 @@ export class RevealAudio {
 
     this.pad.start();
     this.padSub.start();
+
+    // EXCHANGE shimmer: two close, slightly detuned high sines, silent until
+    // `updateExchange` raises the gate. Kept as its own bus rather than mixed
+    // into `padGain` so it never fights the per-act pad ramps above.
+    this.shimmerGain = this.context.createGain();
+    this.shimmerGain.gain.value = 0;
+    this.shimmerGain.connect(this.masterGain);
+
+    this.shimmer = this.context.createOscillator();
+    this.shimmer.type = "sine";
+    this.shimmer.frequency.value = 1320;
+
+    this.shimmerDetune = this.context.createOscillator();
+    this.shimmerDetune.type = "sine";
+    this.shimmerDetune.frequency.value = 1327;
+
+    this.shimmer.connect(this.shimmerGain);
+    this.shimmerDetune.connect(this.shimmerGain);
+    this.shimmer.start();
+    this.shimmerDetune.start();
   }
 
   /** Browsers require a user gesture before audio can play. */
@@ -66,7 +100,24 @@ export class RevealAudio {
     this.active = active;
     if (!active) {
       this.padGain.gain.setTargetAtTime(0, this.context.currentTime, 0.1);
+      this.shimmerGain.gain.setTargetAtTime(0, this.context.currentTime, 0.1);
     }
+  }
+
+  /**
+   * EXCHANGE: fades the shimmer bus in above `EXCHANGE_SHIMMER_GATE` and out
+   * below it, scaling the remaining headroom by intensity so it still grows
+   * smoothly all the way to the curve's ceiling rather than snapping on.
+   */
+  updateExchange(intensity: number): void {
+    if (!this.active) return;
+    const headroom = Math.max(0, intensity - EXCHANGE_SHIMMER_GATE) /
+      (1 - EXCHANGE_SHIMMER_GATE);
+    this.shimmerGain.gain.setTargetAtTime(
+      headroom * EXCHANGE_SHIMMER_MAX_GAIN,
+      this.context.currentTime,
+      EXCHANGE_SHIMMER_RAMP_SECONDS,
+    );
   }
 
   /**

@@ -49,6 +49,15 @@ const GRAIN_BY_ACT: Record<Act, number> = {
 const ABERRATION_AMOUNT = 0.0045;
 
 /**
+ * EXCHANGE: a small additive nudge to bloom on top of the per-act baseline
+ * above, so a long rally reads as the neon getting slightly more alive
+ * without ever overriding the act's own bloom language. Kept small — this is
+ * "environment noticeably deeper" at the far end, not a second Act 3.
+ */
+const EXCHANGE_BLOOM_STRENGTH_MAX = 0.25;
+const EXCHANGE_BLOOM_THRESHOLD_MIN_DELTA = 0.08;
+
+/**
  * Under reduced motion the animated grain is the problem, not the grain — a
  * static-looking film pass at low intensity keeps the texture without the
  * per-frame luminance churn. Bloom is left alone; it's bright, but it doesn't
@@ -59,7 +68,7 @@ const REDUCED_GRAIN = 0.05;
 export interface RevealComposer {
   readonly composer: EffectComposer;
   /** Call every frame before rendering; applies per-act tuning. */
-  update(act: Act, watcherCutActive: boolean): void;
+  update(act: Act, watcherCutActive: boolean, exchangeIntensity?: number): void;
   setSize(width: number, height: number): void;
   render(): void;
   dispose(): void;
@@ -95,13 +104,20 @@ export function createRevealComposer(
   // shape has to be asserted once here rather than at each assignment.
   const filmUniforms = film.uniforms as { intensity: { value: number } };
 
-  function update(act: Act, watcherCutActive: boolean): void {
+  function update(
+    act: Act,
+    watcherCutActive: boolean,
+    exchangeIntensity = 0,
+  ): void {
     const reduced = prefersReducedMotion();
 
     const tuning = BLOOM_BY_ACT[act];
-    bloom.strength = tuning.strength;
+    bloom.strength = tuning.strength + EXCHANGE_BLOOM_STRENGTH_MAX * exchangeIntensity;
     bloom.radius = tuning.radius;
-    bloom.threshold = tuning.threshold;
+    bloom.threshold = Math.max(
+      0,
+      tuning.threshold - EXCHANGE_BLOOM_THRESHOLD_MIN_DELTA * exchangeIntensity,
+    );
 
     filmUniforms.intensity.value = reduced ? REDUCED_GRAIN : GRAIN_BY_ACT[act];
 
