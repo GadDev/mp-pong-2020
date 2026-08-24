@@ -328,7 +328,14 @@ function animate(timestamp: number): void {
     if (events.playerScored || events.operatorScored) audio.playScore(frame.act);
 
     renderer.registerEvents(events);
-    audio.update(frame.act, playedSeconds, frame.stutterPulse);
+    audio.update(
+      frame.act,
+      playedSeconds,
+      frame.stutterPulse,
+      dt,
+      state.totalRallies,
+      state.rallyLength,
+    );
     audio.updateExchange(frame.exchangeIntensity);
     renderer.render(state, frame, dt);
 
