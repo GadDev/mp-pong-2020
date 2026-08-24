@@ -242,6 +242,71 @@ describe("Act 2 pulses", () => {
   });
 });
 
+describe("EXCHANGE intensity", () => {
+  it("stays near zero for a short rally and grows for a long one", () => {
+    const presentation = armed();
+    const state = createGameState();
+
+    state.rallyLength = 2;
+    for (let i = 0; i < 60; i += 1) tick(presentation, state);
+    const shortRally = presentation.update(state, 0).exchangeIntensity;
+
+    state.rallyLength = 25;
+    let longRally = 0;
+    for (let i = 0; i < 300; i += 1) {
+      longRally = tick(presentation, state).exchangeIntensity;
+    }
+
+    expect(shortRally).toBeLessThan(0.05);
+    expect(longRally).toBeGreaterThan(0.9);
+  });
+
+  it("rises smoothly rather than jumping between adjacent frames", () => {
+    const presentation = armed();
+    const state = createGameState();
+    state.rallyLength = 25;
+
+    let previous = 0;
+    for (let i = 0; i < 300; i += 1) {
+      const current = tick(presentation, state).exchangeIntensity;
+      expect(current - previous).toBeLessThan(0.05);
+      previous = current;
+    }
+  });
+
+  it("decays rather than snapping to zero when the rally ends", () => {
+    const presentation = armed();
+    const state = createGameState();
+
+    state.rallyLength = 25;
+    for (let i = 0; i < 300; i += 1) tick(presentation, state);
+    const peak = presentation.update(state, 0).exchangeIntensity;
+
+    // Point scored: `resetBall` snaps `rallyLength` back to 0.
+    state.rallyLength = 0;
+    const oneFrameLater = tick(presentation, state).exchangeIntensity;
+
+    expect(oneFrameLater).toBeGreaterThan(0);
+    expect(oneFrameLater).toBeLessThan(peak);
+  });
+
+  it("keeps a non-zero floor after the rally ends instead of fully resetting", () => {
+    const presentation = armed();
+    const state = createGameState();
+
+    state.rallyLength = 25;
+    for (let i = 0; i < 300; i += 1) tick(presentation, state);
+
+    state.rallyLength = 0;
+    let intensity = 0;
+    for (let i = 0; i < 600; i += 1) {
+      intensity = tick(presentation, state).exchangeIntensity;
+    }
+
+    expect(intensity).toBeGreaterThan(0);
+  });
+});
+
 describe("act clock", () => {
   it("advances only by the dt it is given, so a paused frame freezes it", () => {
     const presentation = armed();

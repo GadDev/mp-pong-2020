@@ -9,6 +9,14 @@
  * rather than at it from above. The ball travels along Z; paddles slide
  * along X. The player is at +Z (nearest the camera), OPERATOR at -Z.
  */
+import {
+  adaptationProbability,
+  createBehaviorProfile,
+  learnedBehaviorBias,
+  observePlayerHit,
+  ADAPTATION_NOISE,
+  type BehaviorProfile,
+} from "./behaviorProfile";
 
 /** Half-width of the playable court on X — paddles slide within ±this. */
 export const COURT_HALF_WIDTH = 6;
@@ -86,6 +94,25 @@ export const OPERATOR_TIERS: readonly OperatorTier[] = [
   { speed: 7.6, deadzone: 0.18, prediction: 0.95, aimError: 1.0 },
 ];
 
+/**
+ * Paddle mirroring: an extremely subtle tell, from Act II on, that OPERATOR
+ * is watching the player's paddle and not just the ball. Only ever sampled
+ * and fired while the ball is heading away from OPERATOR's side (`!incoming`
+ * in `stepOperator`), so it can never come at the cost of an intercept — the
+ * normal chase target is used unconditionally whenever OPERATOR needs the
+ * ball. Rare, delayed and imprecise by construction: the point is a player
+ * wondering "was that copying me?", never noticing a mechanic.
+ */
+const MIRROR_MIN_TIER = 1; // Act II's tier index (see operatorTierFor in presentationState.ts).
+const MIRROR_MIN_PLAYER_DELTA = 0.35; // Ignore paddle jitter/noise below this magnitude.
+const MIRROR_TRIGGER_PROBABILITY = 0.05; // Chance per qualifying player movement.
+const MIRROR_DELAY_MIN = 0.5; // Seconds before OPERATOR reproduces the movement.
+const MIRROR_DELAY_MAX = 1.4;
+const MIRROR_SCALE_MIN = 0.4; // Reproduced movement is a fraction of the player's, never exact.
+const MIRROR_SCALE_MAX = 0.7;
+const MIRROR_COOLDOWN = 14; // Minimum seconds between mirrored movements.
+const MIRROR_FIRE_TIMEOUT = 1.2; // Force-clear a fire in progress rather than let it linger.
+
 export interface GameState {
   ball: { x: number; z: number; vx: number; vz: number };
   /** Paddle centre X. Both paddles are constrained to the court width. */
@@ -108,6 +135,24 @@ export interface GameState {
   /** Counts down while the ball waits at centre after a point. */
   serveDelay: number;
   operatorTier: number;
+  /** Previous frame's player paddle X, so `stepOperator` can detect a movement to mirror. */
+  lastPlayerPaddleX: number;
+  /** Non-zero while a mirrored movement is scheduled or firing. */
+  mirrorOffset: number;
+  /** OPERATOR's paddle X when the current mirror was scheduled; the mirror targets this plus `mirrorOffset`. */
+  mirrorBaseX: number;
+  /** Seconds left before a scheduled mirror starts firing. */
+  mirrorDelay: number;
+  /** Seconds left to finish firing before it's force-cleared. */
+  mirrorFireTimer: number;
+  /** Seconds left before another mirror can be scheduled. */
+  mirrorCooldown: number;
+  /** Increments once per candidate movement; seeds the deterministic trigger/scale/delay rolls. */
+  mirrorSeed: number;
+  /** Running read on the player's own tendencies — see `behaviorProfile.ts`. */
+  behaviorProfile: BehaviorProfile;
+  /** Elapsed match seconds, advanced by `dt`. Feeds timing telemetry only — no physics reads it. */
+  matchClock: number;
 }
 
 /** Discrete things that happened during one `stepGame` call, for the render/audio layer to react to. */
@@ -159,6 +204,15 @@ export function createGameState(): GameState {
     winner: null,
     serveDelay: SERVE_DELAY,
     operatorTier: 0,
+    lastPlayerPaddleX: 0,
+    mirrorOffset: 0,
+    mirrorBaseX: 0,
+    mirrorDelay: 0,
+    mirrorFireTimer: 0,
+    mirrorCooldown: 0,
+    mirrorSeed: 0,
+    behaviorProfile: createBehaviorProfile(),
+    matchClock: 0,
   };
 }
 
@@ -244,6 +298,59 @@ function signedNoise(n: number): number {
 }
 
 /**
+ * Samples the player's paddle for a movement worth mirroring later. Only ever
+ * schedules or fires while `!mustIntercept`, so it can never compete with an
+ * actual save; a mirror in flight is dropped outright the instant the ball
+ * turns incoming. Returns the X to move toward this substep, or `null` if
+ * `stepOperator` should fall back to its normal ball-chasing target.
+ */
+function stepMirror(state: GameState, dt: number, mustIntercept: boolean): number | null {
+  state.mirrorCooldown = Math.max(0, state.mirrorCooldown - dt);
+
+  const playerDelta = state.playerPaddleX - state.lastPlayerPaddleX;
+  state.lastPlayerPaddleX = state.playerPaddleX;
+
+  if (state.mirrorOffset !== 0) {
+    if (mustIntercept) {
+      state.mirrorOffset = 0;
+      state.mirrorDelay = 0;
+      return null;
+    }
+    if (state.mirrorDelay > 0) {
+      state.mirrorDelay -= dt;
+      return null;
+    }
+
+    state.mirrorFireTimer -= dt;
+    const target = clampPaddle(state.mirrorBaseX + state.mirrorOffset);
+    if (state.mirrorFireTimer <= 0 || Math.abs(target - state.operatorPaddleX) < 0.05) {
+      state.mirrorOffset = 0;
+    }
+    return target;
+  }
+
+  if (
+    !mustIntercept &&
+    state.operatorTier >= MIRROR_MIN_TIER &&
+    state.mirrorCooldown <= 0 &&
+    Math.abs(playerDelta) >= MIRROR_MIN_PLAYER_DELTA
+  ) {
+    state.mirrorSeed += 1;
+    const roll = (signedNoise(state.mirrorSeed * 7 + 1) + 1) / 2;
+    if (roll < MIRROR_TRIGGER_PROBABILITY) {
+      const scaleRoll = (signedNoise(state.mirrorSeed * 7 + 2) + 1) / 2;
+      const delayRoll = (signedNoise(state.mirrorSeed * 7 + 3) + 1) / 2;
+      state.mirrorOffset = playerDelta * (MIRROR_SCALE_MIN + scaleRoll * (MIRROR_SCALE_MAX - MIRROR_SCALE_MIN));
+      state.mirrorBaseX = state.operatorPaddleX;
+      state.mirrorDelay = MIRROR_DELAY_MIN + delayRoll * (MIRROR_DELAY_MAX - MIRROR_DELAY_MIN);
+      state.mirrorFireTimer = MIRROR_FIRE_TIMEOUT;
+      state.mirrorCooldown = MIRROR_COOLDOWN;
+    }
+  }
+  return null;
+}
+
+/**
  * OPERATOR's paddle movement for one frame. Its tier is set by the
  * presentation layer. `aimErrorMultiplier` is the interview's one sanctioned
  * gameplay-facing knob (`ObservationDirector.getOperatorAimErrorMultiplier`,
@@ -261,9 +368,33 @@ function stepOperator(state: GameState, dt: number, aimErrorMultiplier: number):
       predictBallXAt(state, -COURT_HALF_LENGTH) * tier.prediction
     : state.ball.x;
 
+  const mirrorTarget = stepMirror(state, dt, incoming);
+
+  // Adaptation only applies while actually predicting an incoming ball — it's
+  // a bias on the aim point, not a separate omniscient read of the future.
+  let adaptationBias = 0;
+  let adaptationNoise = 0;
+  if (incoming) {
+    const bias = learnedBehaviorBias(state.behaviorProfile);
+    const probability = adaptationProbability(state.behaviorProfile);
+    // Deterministic roll, keyed off the exchange count with a different
+    // multiplier than the aim-error noise below so the two don't correlate.
+    const roll = (signedNoise(state.totalRallies * 31 + 17) + 1) / 2;
+    if (roll < probability) {
+      adaptationBias = bias;
+      adaptationNoise = ADAPTATION_NOISE * signedNoise(state.totalRallies * 53 + 5);
+    }
+  }
+
   // Keyed on the exchange count, so the error stays fixed for the duration of
   // one incoming ball rather than jittering the paddle every frame.
-  const chased = aimed + tier.aimError * aimErrorMultiplier * signedNoise(state.totalRallies + 1);
+  const chased =
+    mirrorTarget !== null
+      ? mirrorTarget
+      : aimed +
+        adaptationBias +
+        adaptationNoise +
+        tier.aimError * aimErrorMultiplier * signedNoise(state.totalRallies + 1);
 
   const delta = chased - state.operatorPaddleX;
   if (Math.abs(delta) <= tier.deadzone) return;
@@ -279,6 +410,8 @@ function stepOperator(state: GameState, dt: number, aimErrorMultiplier: number):
  */
 export function stepGame(state: GameState, dt: number, aimErrorMultiplier = 1): StepEvents {
   if (state.paused || state.matchOver || dt <= 0) return { ...NO_EVENTS };
+
+  state.matchClock += dt;
 
   if (state.serveDelay > 0) {
     state.serveDelay = Math.max(0, state.serveDelay - dt);
@@ -315,6 +448,7 @@ export function stepGame(state: GameState, dt: number, aimErrorMultiplier = 1): 
         state.rallyLength += 1;
         state.totalRallies += 1;
         const hit = deflect(state, state.playerPaddleX, -1);
+        observePlayerHit(state.behaviorProfile, hit.normalizedOffset, state.matchClock);
         events.paddleHit = true;
         events.paddleHitSide = "player";
         events.paddleHitOffset = hit.normalizedOffset;
