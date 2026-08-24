@@ -9,11 +9,32 @@ import {
 import { Act, type PresentationFrame } from "../game/presentationState";
 import { updateRevealCamera } from "../reveal/camera";
 import { RevealHud } from "../reveal/hud";
-import { buildArena, OPERATOR_REVEALED_COLOR, type Arena } from "../reveal/scene";
-import { CYAN, SMOG_PURPLE_BLACK, VOID_BLACK } from "../reveal/palette";
+import {
+  buildArena,
+  BALL_TRAIL_MAX_POINTS,
+  OPERATOR_REVEALED_COLOR,
+  type Arena,
+} from "../reveal/scene";
+import { CYAN, DEEP_BLUE, SMOG_PURPLE_BLACK, VOID_BLACK } from "../reveal/palette";
 import { createRevealComposer, type RevealComposer } from "../reveal/postprocessing";
 import { FrameRateProbe } from "../reveal/framerate";
 import { buildHorizon, type Horizon } from "../reveal/horizon";
+import { motionScale } from "../motion";
+
+/**
+ * EXCHANGE tuning: centralized here because `renderer.ts` is what owns the
+ * fog, the grid colour and the ball trail. `postprocessing.ts` and
+ * `audio.ts` hold their own EXCHANGE constants next to the pass/layer each
+ * drives, per this codebase's convention of keeping tuning beside its logic
+ * rather than in one shared constants file.
+ */
+const EXCHANGE_FOG_BASE_DENSITY = 0.012;
+const EXCHANGE_FOG_MIN_DENSITY = 0.004;
+/** Grid "wakes up" toward this brighter blue as rally intensity rises. */
+const EXCHANGE_GRID_GLOW_COLOR = 0x3fd0ff;
+const EXCHANGE_TRAIL_MAX_OPACITY = 0.5;
+/** Additive on top of Act 2/3's own drift amplitude; Act 1 never gets this. */
+const EXCHANGE_CAMERA_DRIFT_MAX = 0.05;
 
 /**
  * TECHSTACK.md module 3 of 3. Reads `GameState` and `PresentationFrame` and
@@ -32,6 +53,9 @@ export class Renderer {
   private readonly targetBackground = new THREE.Color();
   private readonly operatorColor = new THREE.Color(CYAN);
   private readonly targetOperatorColor = new THREE.Color();
+  private readonly gridColor = new THREE.Color(DEEP_BLUE);
+  private readonly targetGridColor = new THREE.Color();
+  private readonly gridGlowColor = new THREE.Color(EXCHANGE_GRID_GLOW_COLOR);
   private driftSeconds = 0;
 
   constructor(container: HTMLElement) {
@@ -109,16 +133,53 @@ export class Renderer {
       this.driftSeconds,
     );
 
-    this.applyActPalette(frame.act, dt);
+    // EXCHANGE camera drift: a few more pixels of sway on top of whatever Act
+    // 2/3 are already doing, never in Act 1 — CLAUDE.md is explicit that Act
+    // 1's stillness is load-bearing and gets no juice from anywhere.
+    if (frame.act !== Act.ONE) {
+      const drift = motionScale(EXCHANGE_CAMERA_DRIFT_MAX * frame.exchangeIntensity);
+      this.camera.position.x += Math.sin(this.driftSeconds * 1.3) * drift;
+      this.camera.position.y += Math.cos(this.driftSeconds * 1.1) * drift * 0.5;
+    }
+
+    this.applyActPalette(frame.act, frame.exchangeIntensity, dt);
     this.horizon.update(frame.act, dt);
+    this.updateBallTrail(state, frame.exchangeIntensity);
     this.hud.update(state, frame, watcherCut, dt);
 
     // Chromatic aberration is scoped to exactly the watcher cut — the same
     // boolean the camera just returned, so the two can't disagree about which
     // frames are "watcher" frames.
-    this.composer.update(frame.act, watcherCut);
+    this.composer.update(frame.act, watcherCut, frame.exchangeIntensity);
     this.composer.render();
     this.frameRate.sample(frame.act);
+  }
+
+  /**
+   * Ring-buffer ball trail: always shifted so the geometry is ready the
+   * instant intensity rises, but only opaque and only drawn back `activePoints`
+   * vertices — a short rally keeps a near-invisible, near-zero-length tail.
+   */
+  private updateBallTrail(state: GameState, intensity: number): void {
+    const positions = this.arena.ballTrailPositions;
+    positions.copyWithin(0, 3);
+    const lastIndex = BALL_TRAIL_MAX_POINTS - 1;
+    positions[lastIndex * 3] = state.ball.x;
+    positions[lastIndex * 3 + 1] = PLAY_HEIGHT;
+    positions[lastIndex * 3 + 2] = state.ball.z;
+
+    const positionAttribute = this.arena.ballTrail.geometry.getAttribute(
+      "position",
+    ) as THREE.BufferAttribute;
+    positionAttribute.needsUpdate = true;
+
+    const activePoints = Math.max(2, Math.round(intensity * BALL_TRAIL_MAX_POINTS));
+    this.arena.ballTrail.geometry.setDrawRange(
+      BALL_TRAIL_MAX_POINTS - activePoints,
+      activePoints,
+    );
+    (this.arena.ballTrail.material as THREE.LineBasicMaterial).opacity =
+      intensity * EXCHANGE_TRAIL_MAX_OPACITY;
   }
 
   /**
@@ -128,21 +189,36 @@ export class Renderer {
    * and both mutate existing material/scene colours in place — no per-frame
    * allocation, nothing to dispose.
    */
-  private applyActPalette(act: Act, dt: number): void {
+  private applyActPalette(act: Act, exchangeIntensity: number, dt: number): void {
     this.targetBackground.setHex(act === Act.ONE ? VOID_BLACK : SMOG_PURPLE_BLACK);
     this.targetOperatorColor.setHex(
       act === Act.THREE ? OPERATOR_REVEALED_COLOR : CYAN,
     );
+    // EXCHANGE "grid emissive strength": the grid brightens toward a livelier
+    // blue as the rally goes on, independent of the act's own palette shift.
+    this.targetGridColor
+      .setHex(DEEP_BLUE)
+      .lerp(this.gridGlowColor, exchangeIntensity);
 
     // Exponential approach, framed in dt so the ramp is refresh-rate independent.
     const k = 1 - Math.exp(-dt * 0.6);
     this.background.lerp(this.targetBackground, k);
     this.operatorColor.lerp(this.targetOperatorColor, k);
+    this.gridColor.lerp(this.targetGridColor, k);
 
     (this.arena.scene.background as THREE.Color).copy(this.background);
     (this.arena.operatorPaddle.material as THREE.MeshBasicMaterial).color.copy(
       this.operatorColor,
     );
+    this.arena.gridMaterial.color.copy(this.gridColor);
+
+    // EXCHANGE "fog visibility" / "distant geometry visibility": the same
+    // fog density read two ways. Thinning it (rather than thickening) is what
+    // makes the environment read as *opening up* — "noticeably deeper" — as
+    // the rally builds, not as murkier.
+    this.arena.fog.density =
+      EXCHANGE_FOG_BASE_DENSITY -
+      (EXCHANGE_FOG_BASE_DENSITY - EXCHANGE_FOG_MIN_DENSITY) * exchangeIntensity;
   }
 
   dispose(): void {
