@@ -13,6 +13,7 @@ import { buildArena, OPERATOR_REVEALED_COLOR, type Arena } from "../reveal/scene
 import { CYAN, SMOG_PURPLE_BLACK, VOID_BLACK } from "../reveal/palette";
 import { createRevealComposer, type RevealComposer } from "../reveal/postprocessing";
 import { FrameRateProbe } from "../reveal/framerate";
+import { buildHorizon, type Horizon } from "../reveal/horizon";
 
 /**
  * TECHSTACK.md module 3 of 3. Reads `GameState` and `PresentationFrame` and
@@ -23,6 +24,7 @@ export class Renderer {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly arena: Arena;
+  private readonly horizon: Horizon;
   private readonly hud: RevealHud;
   private readonly composer: RevealComposer;
   private readonly frameRate = new FrameRateProbe();
@@ -34,6 +36,7 @@ export class Renderer {
 
   constructor(container: HTMLElement) {
     this.arena = buildArena();
+    this.horizon = buildHorizon(this.arena.scene);
 
     this.camera = new THREE.PerspectiveCamera(
       60,
@@ -107,6 +110,7 @@ export class Renderer {
     );
 
     this.applyActPalette(frame.act, dt);
+    this.horizon.update(frame.act, dt);
     this.hud.update(state, frame, watcherCut, dt);
 
     // Chromatic aberration is scoped to exactly the watcher cut — the same
@@ -143,6 +147,7 @@ export class Renderer {
 
   dispose(): void {
     window.removeEventListener("resize", this.handleResize);
+    this.horizon.dispose();
     this.arena.dispose();
     this.composer.dispose();
     this.renderer.dispose();
