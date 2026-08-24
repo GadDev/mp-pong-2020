@@ -12,12 +12,19 @@ import { CYAN, DEEP_BLUE, MAGENTA, NEAR_WHITE, VOID_BLACK } from "./palette";
 const PADDLE_DEPTH = 0.2;
 const PADDLE_HEIGHT = 0.5;
 
+/** Ball trail: a fixed ring buffer of recent positions, EXCHANGE fades it in. */
+export const BALL_TRAIL_MAX_POINTS = 24;
+
 export interface Arena {
   scene: THREE.Scene;
   ball: THREE.Mesh;
   playerPaddle: THREE.Mesh;
   operatorPaddle: THREE.Mesh;
   grid: THREE.GridHelper;
+  gridMaterial: THREE.LineBasicMaterial;
+  fog: THREE.FogExp2;
+  ballTrail: THREE.Line;
+  ballTrailPositions: Float32Array;
   /** Every geometry/material this module allocated, for teardown. */
   dispose(): void;
 }
@@ -35,6 +42,13 @@ export interface Arena {
 export function buildArena(): Arena {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(VOID_BLACK);
+
+  // EXCHANGE thins this as rally intensity rises — "distant geometry
+  // visibility" and "fog visibility" from the same knob, since they're the
+  // same fog parameter read two ways. Density is set in `applyActPalette`
+  // per-frame; the starting value here is just Act 1's resting state.
+  const fog = new THREE.FogExp2(VOID_BLACK, 0.012);
+  scene.fog = fog;
 
   const disposables: Array<{ dispose(): void }> = [];
   const track = <T extends { dispose(): void }>(resource: T): T => {
@@ -110,12 +124,42 @@ export function buildArena(): Arena {
   ball.position.set(0, PLAY_HEIGHT, 0);
   scene.add(ball);
 
+  // EXCHANGE ball trail: a fixed-length ring buffer of recent ball positions,
+  // rendered as one line. Fully transparent (opacity 0) until intensity rises
+  // — the renderer decides how many of the points are "live" each frame, so a
+  // short rally never shows a long ghost tail.
+  const ballTrailPositions = new Float32Array(BALL_TRAIL_MAX_POINTS * 3);
+  for (let i = 0; i < BALL_TRAIL_MAX_POINTS; i++) {
+    ballTrailPositions[i * 3] = ball.position.x;
+    ballTrailPositions[i * 3 + 1] = ball.position.y;
+    ballTrailPositions[i * 3 + 2] = ball.position.z;
+  }
+  const ballTrailGeometry = track(new THREE.BufferGeometry());
+  ballTrailGeometry.setAttribute(
+    "position",
+    new THREE.BufferAttribute(ballTrailPositions, 3),
+  );
+  const ballTrailMaterial = track(
+    new THREE.LineBasicMaterial({
+      color: NEAR_WHITE,
+      transparent: true,
+      opacity: 0,
+      fog: false,
+    }),
+  );
+  const ballTrail = new THREE.Line(ballTrailGeometry, ballTrailMaterial);
+  scene.add(ballTrail);
+
   return {
     scene,
     ball,
     playerPaddle,
     operatorPaddle,
     grid,
+    gridMaterial: grid.material as THREE.LineBasicMaterial,
+    fog,
+    ballTrail,
+    ballTrailPositions,
     dispose() {
       for (const resource of disposables) resource.dispose();
       disposables.length = 0;
