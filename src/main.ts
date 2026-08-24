@@ -336,6 +336,7 @@ function animate(timestamp: number): void {
       state.totalRallies,
       state.rallyLength,
     );
+    audio.updateExchange(frame.exchangeIntensity);
     renderer.render(state, frame, dt);
 
     // The dossier is the climax of a match that escalated, regardless of who
