@@ -158,6 +158,9 @@ describe("score and win condition", () => {
 
     expect(events).toEqual({
       paddleHit: false,
+      paddleHitSide: null,
+      paddleHitOffset: 0,
+      paddleHitSpeed: 0,
       wallHit: false,
       playerScored: false,
       operatorScored: false,

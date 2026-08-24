@@ -58,8 +58,14 @@ const REDUCED_GRAIN = 0.05;
 
 export interface RevealComposer {
   readonly composer: EffectComposer;
-  /** Call every frame before rendering; applies per-act tuning. */
-  update(act: Act, watcherCutActive: boolean): void;
+  /**
+   * Call every frame before rendering; applies per-act tuning.
+   * `grainVarianceMultiplier` is the interview's POSSIBILITY answer's one
+   * sanctioned visual knob (`ObservationDirector.getEnvironmentVarianceMultiplier`)
+   * — a small, bounded nudge on top of the act's own grain level, not a new
+   * effect.
+   */
+  update(act: Act, watcherCutActive: boolean, grainVarianceMultiplier?: number): void;
   setSize(width: number, height: number): void;
   render(): void;
   dispose(): void;
@@ -95,7 +101,7 @@ export function createRevealComposer(
   // shape has to be asserted once here rather than at each assignment.
   const filmUniforms = film.uniforms as { intensity: { value: number } };
 
-  function update(act: Act, watcherCutActive: boolean): void {
+  function update(act: Act, watcherCutActive: boolean, grainVarianceMultiplier = 1): void {
     const reduced = prefersReducedMotion();
 
     const tuning = BLOOM_BY_ACT[act];
@@ -103,7 +109,9 @@ export function createRevealComposer(
     bloom.radius = tuning.radius;
     bloom.threshold = tuning.threshold;
 
-    filmUniforms.intensity.value = reduced ? REDUCED_GRAIN : GRAIN_BY_ACT[act];
+    filmUniforms.intensity.value = reduced
+      ? REDUCED_GRAIN
+      : GRAIN_BY_ACT[act] * grainVarianceMultiplier;
 
     // The aberration cut is the single most aggressive visual beat in the
     // game — a hard jump-cut with the color channels torn apart. It is the

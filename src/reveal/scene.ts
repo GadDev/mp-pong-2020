@@ -7,6 +7,7 @@ import {
   PLAY_HEIGHT,
 } from "../game/gameState";
 import { CYAN, DEEP_BLUE, MAGENTA, NEAR_WHITE, VOID_BLACK } from "./palette";
+import { createPaddleGeometry, createPaddleVisual, type PaddleVisual } from "./paddle";
 
 /** Paddle extent along Z (its "thickness") and its height off the floor plane. */
 const PADDLE_DEPTH = 0.2;
@@ -15,8 +16,8 @@ const PADDLE_HEIGHT = 0.5;
 export interface Arena {
   scene: THREE.Scene;
   ball: THREE.Mesh;
-  playerPaddle: THREE.Mesh;
-  operatorPaddle: THREE.Mesh;
+  playerPaddle: PaddleVisual;
+  operatorPaddle: PaddleVisual;
   grid: THREE.GridHelper;
   /** Every geometry/material this module allocated, for teardown. */
   dispose(): void;
@@ -86,23 +87,27 @@ export function buildArena(): Arena {
   centreLine.position.y = 0.01;
   scene.add(centreLine);
 
-  const paddleGeometry = track(
-    new THREE.BoxGeometry(PADDLE_HALF_WIDTH * 2, PADDLE_HEIGHT, PADDLE_DEPTH),
+  // Shared geometry (core box, edge strips, seams, grooves, end-caps) between
+  // both paddles, same reuse pattern the old single `paddleGeometry` used.
+  const paddleGeometry = createPaddleGeometry(
+    PADDLE_HALF_WIDTH * 2,
+    PADDLE_HEIGHT,
+    PADDLE_DEPTH,
   );
+  for (const geom of Object.values(paddleGeometry)) track(geom);
 
   // The player's paddle stays cyan in every act — it's the one object the
-  // player has to read reliably. OPERATOR's material is the one that changes
-  // (MOODBOARD.md: magenta is "the opponent's signature color once it's
-  // revealed as a character, not a wall"), so it gets its own instance.
-  const playerMaterial = track(new THREE.MeshBasicMaterial({ color: CYAN }));
-  const playerPaddle = new THREE.Mesh(paddleGeometry, playerMaterial);
-  playerPaddle.position.set(0, PLAY_HEIGHT, COURT_HALF_LENGTH);
-  scene.add(playerPaddle);
+  // player has to read reliably. OPERATOR's accent material is the one that
+  // changes (MOODBOARD.md: magenta is "the opponent's signature color once
+  // it's revealed as a character, not a wall"), so it gets its own instance;
+  // its dark core, unlike the old single-material box, never changes.
+  const playerPaddle = createPaddleVisual("player", paddleGeometry, CYAN, track);
+  playerPaddle.group.position.set(0, PLAY_HEIGHT, COURT_HALF_LENGTH);
+  scene.add(playerPaddle.group);
 
-  const operatorMaterial = track(new THREE.MeshBasicMaterial({ color: CYAN }));
-  const operatorPaddle = new THREE.Mesh(paddleGeometry, operatorMaterial);
-  operatorPaddle.position.set(0, PLAY_HEIGHT, -COURT_HALF_LENGTH);
-  scene.add(operatorPaddle);
+  const operatorPaddle = createPaddleVisual("operator", paddleGeometry, NEAR_WHITE, track);
+  operatorPaddle.group.position.set(0, PLAY_HEIGHT, -COURT_HALF_LENGTH);
+  scene.add(operatorPaddle.group);
 
   const ballGeometry = track(new THREE.SphereGeometry(BALL_RADIUS, 16, 16));
   const ballMaterial = track(new THREE.MeshBasicMaterial({ color: NEAR_WHITE }));

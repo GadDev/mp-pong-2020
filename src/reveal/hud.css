@@ -116,6 +116,58 @@
   opacity: 0.8;
 }
 
+.reveal-hud__controls-hint {
+  position: absolute;
+  bottom: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: #c8c8c8;
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+
+.reveal-hud__controls-hint--visible {
+  opacity: 0.55;
+}
+
+.reveal-hud__interview {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.reveal-hud__interview--visible {
+  opacity: 0.9;
+}
+
+.reveal-hud__interview-prompt {
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  line-height: 1.6;
+  white-space: pre-line;
+  color: #e8fbff;
+}
+
+.reveal-hud__interview-answers {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: #6a7580;
+}
+
+.reveal-hud__interview-answer--active {
+  color: #00f0ff;
+}
+
 .reveal-hud__debug {
   position: absolute;
   bottom: 24px;

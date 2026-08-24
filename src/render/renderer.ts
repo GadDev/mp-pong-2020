@@ -1,16 +1,19 @@
 import * as THREE from "three";
 import {
+  BALL_BASE_SPEED,
   COURT_HALF_WIDTH,
+  MAX_RALLY_SPEEDUP,
   PADDLE_HALF_WIDTH,
   PLAY_HEIGHT,
   type GameState,
   type StepEvents,
 } from "../game/gameState";
 import { Act, type PresentationFrame } from "../game/presentationState";
+import type { ActivePrompt } from "../game/observation/ObservationDirector";
 import { updateRevealCamera } from "../reveal/camera";
 import { RevealHud } from "../reveal/hud";
 import { buildArena, OPERATOR_REVEALED_COLOR, type Arena } from "../reveal/scene";
-import { CYAN, SMOG_PURPLE_BLACK, VOID_BLACK } from "../reveal/palette";
+import { NEAR_WHITE, SMOG_PURPLE_BLACK, VOID_BLACK } from "../reveal/palette";
 import { createRevealComposer, type RevealComposer } from "../reveal/postprocessing";
 import { FrameRateProbe } from "../reveal/framerate";
 
@@ -28,8 +31,16 @@ export class Renderer {
   private readonly frameRate = new FrameRateProbe();
   private readonly background = new THREE.Color(VOID_BLACK);
   private readonly targetBackground = new THREE.Color();
-  private readonly operatorColor = new THREE.Color(CYAN);
+  private readonly operatorColor = new THREE.Color(NEAR_WHITE);
   private readonly targetOperatorColor = new THREE.Color();
+  /**
+   * 0..1: how far OPERATOR's paddle has diverged from the player's, purely
+   * cosmetic. 0 in Act I ("approximately symmetrical" per the design brief),
+   * easing toward 1 by Act III — the same exponential-approach pattern as
+   * `operatorColor`/`background` below, so all three escalate at a
+   * consistent, refresh-rate-independent rate.
+   */
+  private operatorDistinction = 0;
   private driftSeconds = 0;
 
   constructor(container: HTMLElement) {
@@ -85,19 +96,54 @@ export class Renderer {
     return normalized * (COURT_HALF_WIDTH - PADDLE_HALF_WIDTH);
   }
 
-  /** Forwarded from the game loop so the HUD's score flash matches the simulation. */
-  registerEvents(events: StepEvents): void {
+  /**
+   * Forwarded from the game loop so the HUD's score flash matches the
+   * simulation, and so a legitimate paddle hit reaches the struck paddle's
+   * own impact reaction. `state.rallyLength` (not the event) is the source
+   * for the sensor-node tell — it's the match's running consecutive-return
+   * count, exactly what "several consecutive successful returns" means.
+   */
+  registerEvents(state: GameState, events: StepEvents): void {
     this.hud.registerEvents(events);
+
+    if (events.paddleHit && events.paddleHitSide) {
+      const speedRange = BALL_BASE_SPEED * MAX_RALLY_SPEEDUP;
+      const intensity = Math.min(
+        1,
+        Math.max(0.7, 0.7 + (0.3 * (events.paddleHitSpeed - BALL_BASE_SPEED)) / speedRange),
+      );
+      const impact = { offset: events.paddleHitOffset, intensity, rallyLength: state.rallyLength };
+      const paddle =
+        events.paddleHitSide === "player" ? this.arena.playerPaddle : this.arena.operatorPaddle;
+      paddle.onImpact(impact);
+    }
   }
 
-  render(state: GameState, frame: PresentationFrame, dt: number): void {
+  /** Forwarded from `ObservationDirector`'s per-frame result; purely a HUD concern, so it's a thin pass-through. */
+  updateInterview(prompt: ActivePrompt | null, leanDirection: "left" | "right" | null): void {
+    this.hud.updateInterview(prompt, leanDirection);
+  }
+
+  render(
+    state: GameState,
+    frame: PresentationFrame,
+    dt: number,
+    grainVarianceMultiplier = 1,
+  ): void {
     // Only advances while playing, so the camera's micro-drift freezes on pause
     // instead of jumping forward when play resumes.
     this.driftSeconds += dt;
 
     this.arena.ball.position.set(state.ball.x, PLAY_HEIGHT, state.ball.z);
-    this.arena.playerPaddle.position.x = state.playerPaddleX;
-    this.arena.operatorPaddle.position.x = state.operatorPaddleX;
+    this.arena.playerPaddle.group.position.x = state.playerPaddleX;
+    this.arena.operatorPaddle.group.position.x = state.operatorPaddleX;
+
+    // Act I: 0 (symmetrical). Act II: halfway. Act III: fully diverged.
+    const targetDistinction = frame.act === Act.ONE ? 0 : frame.act === Act.TWO ? 0.5 : 1;
+    this.operatorDistinction += (targetDistinction - this.operatorDistinction) * (1 - Math.exp(-dt * 0.6));
+
+    this.arena.playerPaddle.update(dt);
+    this.arena.operatorPaddle.update(dt, this.operatorDistinction);
 
     const watcherCut = updateRevealCamera(
       this.camera,
@@ -112,7 +158,7 @@ export class Renderer {
     // Chromatic aberration is scoped to exactly the watcher cut — the same
     // boolean the camera just returned, so the two can't disagree about which
     // frames are "watcher" frames.
-    this.composer.update(frame.act, watcherCut);
+    this.composer.update(frame.act, watcherCut, grainVarianceMultiplier);
     this.composer.render();
     this.frameRate.sample(frame.act);
   }
@@ -127,7 +173,7 @@ export class Renderer {
   private applyActPalette(act: Act, dt: number): void {
     this.targetBackground.setHex(act === Act.ONE ? VOID_BLACK : SMOG_PURPLE_BLACK);
     this.targetOperatorColor.setHex(
-      act === Act.THREE ? OPERATOR_REVEALED_COLOR : CYAN,
+      act === Act.THREE ? OPERATOR_REVEALED_COLOR : NEAR_WHITE,
     );
 
     // Exponential approach, framed in dt so the ramp is refresh-rate independent.
@@ -136,9 +182,7 @@ export class Renderer {
     this.operatorColor.lerp(this.targetOperatorColor, k);
 
     (this.arena.scene.background as THREE.Color).copy(this.background);
-    (this.arena.operatorPaddle.material as THREE.MeshBasicMaterial).color.copy(
-      this.operatorColor,
-    );
+    this.arena.operatorPaddle.accentMaterial.color.copy(this.operatorColor);
   }
 
   dispose(): void {
